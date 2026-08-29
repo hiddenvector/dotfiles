@@ -18,7 +18,8 @@ hv::link() {
 
   # A real file we did not create: preserve it rather than stranding the run.
   if [ -e "$dst" ] && [ ! -L "$dst" ]; then
-    local backup="$dst.bak.$(date +%s)"
+    local backup
+    backup="$dst.bak.$(date +%s)"
     hv::warn "backing up existing $dst -> $backup"
     hv::run mv "$dst" "$backup"
   fi
