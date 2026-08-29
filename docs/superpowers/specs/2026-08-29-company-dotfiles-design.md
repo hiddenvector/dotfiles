@@ -202,6 +202,7 @@ Single entrypoint, symlinked from `bin/hv` to `~/.local/bin/hv`, which is alread
 | `hv identity` | re-run the identity step |
 | `hv machine` | re-run machine name / module selection |
 | `hv overlay init` | create and wire up a personal overlay repo |
+| `hv cheatsheet` | print usage docs for installed modules |
 
 Global flags: `--dry-run`, `--only <step>`, `--yes` (accept all defaults).
 
@@ -293,16 +294,80 @@ Ships:
 
 ---
 
+## Documentation and discoverability
+
+Two audiences need to know what is installed and how to use it: the person, and their
+coding agents. They need different documents, and conflating them is a mistake in both
+directions.
+
+### Single source of truth
+
+Per-module fragments under `docs/usage/{core,swift,web,python,security}.md`, with three
+consumers:
+
+- **`hv cheatsheet`** — prints only the modules actually installed on this machine.
+  `--all` for everything; a module name for one section. Tools a person does not have
+  are noise they cannot distinguish from tools they have not learned yet.
+- **`docs/USAGE.md`** — generated concatenation of all fragments, committed so it
+  browses on GitHub. `hv check` verifies it matches the fragments, so it cannot
+  silently drift.
+- **the `hv-toolbelt` skill** — reads the same fragments, so agent and human never
+  disagree about what exists.
+
+Fragments keep the "when you would reach for this" framing of the existing USAGE.md
+rather than degrading into bare syntax tables.
+
+`docs/START-HERE.md` covers the ten commands that matter on day one. A 400-line
+reference teaches a newcomer nothing; progressive disclosure is the point.
+
+### Agent access
+
+Agent-facing documentation ships as a **skill** at `claude/skills/hv-toolbelt/`, linked
+into `~/.claude/skills/`. It must not go in `~/.claude/CLAUDE.md`: skills are lazily
+loaded — only name and description occupy context until invoked — whereas CLAUDE.md is
+loaded in full on every session regardless of relevance. This repo's own author
+previously removed eager skill imports from a personal CLAUDE.md after measuring them
+at roughly 29k tokens per session. The same reasoning applies here.
+
+The skill's highest-value content is not a command reference but a **hazard list**.
+Most of the fzf-driven helpers block on a TTY and will hang a non-interactive agent
+indefinitely:
+
+| Agents should | Commands |
+|---|---|
+| use | `gprune`, `gbd`, `g`, and `rg` in preference to `grep` |
+| never use | `ff` `ffa` `fif` `gcof` `glogf` `j` `zi` — interactive, will hang |
+
+### Consequent design change: `bin/` versus shell functions
+
+Rather than relying on documentation to prevent that failure, the split becomes
+structural. Non-interactive helpers are **real executables in `bin/`**, callable by
+anything — an agent, a script, a Makefile, a CI job. Interactive fzf-driven helpers
+remain shell functions in `zsh/.zshrc.d/`, where a TTY is guaranteed.
+
+```
+bin/            hv, gprune, gbd        # executables
+zsh/.zshrc.d/   ff, ffa, fif, gcof, glogf, j
+```
+
+This also removes a latent portability problem: shell functions defined in `.zshrc.d`
+do not exist in a non-interactive shell unless that shell sources the user's profile,
+which varies by harness. Executables on `PATH` always work.
+
+---
+
 ## Repository layout
 
 ```
 dotfiles/
 ├── README.md
 ├── bootstrap                      # curl-able first-run entrypoint
-├── bin/hv
+├── bin/                           # executables: hv, gprune, gbd
 ├── docs/
+│   ├── START-HERE.md              # the ten commands that matter on day one
 │   ├── ONBOARDING.md              # org access, gh auth, signing keys, service accounts
-│   ├── USAGE.md                   # tools and aliases reference
+│   ├── USAGE.md                   # generated from docs/usage/*.md
+│   ├── usage/{core,swift,web,python,security}.md
 │   └── AGENTS.md
 ├── setup/
 │   ├── lib/{log,link,prompt,machine,brew}.sh
@@ -312,7 +377,9 @@ dotfiles/
 ├── git/{gitconfig,gitignore_global,allowed-signers.hv}
 ├── zsh/{.zprofile,.zshrc,.zshrc.d/*.zsh}
 ├── config/starship.toml
-└── claude/{CLAUDE.md,settings.json}
+└── claude/
+    ├── CLAUDE.md, settings.json
+    └── skills/hv-toolbelt/SKILL.md
 ```
 
 ## Bootstrap
@@ -376,6 +443,8 @@ overlay contract, so the last full-dotfiles state stays trivially checkout-able.
 ## Verification
 
 - `hv check` passes on a converged machine and exits nonzero on a drifted one.
+- `hv check` verifies `docs/USAGE.md` matches the `docs/usage/*.md` fragments.
+- No command listed as agent-safe in the `hv-toolbelt` skill requires a TTY.
 - `hv check` warns — informationally, without prompting — when `local.Brewfile` or
   `local.zsh` hold real content and no overlay is configured. Untracked personal
   configuration that will not survive a machine wipe is drift.
