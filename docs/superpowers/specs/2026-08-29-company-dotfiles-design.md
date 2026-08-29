@@ -307,13 +307,34 @@ want. This favors the first-timer over the expert, deliberately.
 
 ## Migration
 
-`hyperspacemark/dotfiles` is **archived, not deleted**, with a README pointer to the
-new repo. The new repo starts fresh with a single well-crafted initial commit rather
-than inheriting nineteen commits of profile-flag churn that this architecture removes.
-History stays linkable in the archived repo.
+`hiddenvector/dotfiles` starts fresh with a single initial commit. Not because the
+existing history is worthless — `hyperspacemark/dotfiles` has 167 commits reaching back
+to 2014-08-16 — but because twelve years of one person's personal configuration is the
+wrong seed for a repo the whole org will clone.
 
-Personal-only packages currently in the tracked Brewfile — `cask "chatgpt"`,
-`cask "codex"` — move to `~/.config/hv/local.Brewfile`.
+**`hyperspacemark/dotfiles` is neither archived nor abandoned. It becomes the personal
+overlay repo**, using the `HV_OVERLAY` contract defined above:
+
+```
+hyperspacemark/dotfiles/
+├── brew/personal.Brewfile     # cask "chatgpt", cask "codex"
+├── zshrc.d/personal.zsh
+├── git/config
+└── README.md                  # lineage: 2014-2026 as full dotfiles, now an HV overlay
+```
+
+Rationale:
+
+- The repo stays *live*. History still reaches 2014 and continues to accrue, which an
+  archived or merely-abandoned repo does not.
+- It closes a gap this design otherwise leaves open: personal extras were headed for
+  the untracked `~/.config/hv/local.Brewfile`, which does not sync between a person's
+  own Macs. As an overlay repo the personal layer is version-controlled and synced.
+- No new machinery. `HV_OVERLAY` already exists for employer-specific config; personal
+  Macs simply point at a different overlay.
+
+Transition: tag `v1-final` at `8a43218` before the commit that reduces the repo to the
+overlay contract, so the last full-dotfiles state stays trivially checkout-able.
 
 ## Verification
 
