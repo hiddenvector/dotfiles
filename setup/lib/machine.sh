@@ -11,11 +11,14 @@ hv::machine_name() {
 
 # macOS defaults look like "Marks-MacBook-Pro", "Mac Studio", "Mark's MacBook Air".
 hv::machine_has_default_name() {
-  local name
+  local name curly
   name="$(hv::machine_name)"
   [ -z "$name" ] && return 0
+  curly="$(printf '\xe2\x80\x99')"
   case "$name" in
-    *MacBook*|*Mac-Studio*|*"Mac Studio"*|*iMac*|*Mac-mini*|*"Mac mini"*|*"'s "*)
+    *MacBook*|*iMac*|*Mac-Studio*|*"Mac Studio"*|*Mac-mini*|*"Mac mini"*|*Mac-Pro*|*"Mac Pro"*)
+      return 0 ;;
+    *"'s "*|*"${curly}s "*)
       return 0 ;;
   esac
   return 1

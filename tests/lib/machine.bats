@@ -76,3 +76,15 @@ MDM enrollment: No"
   [ -n "$output" ]
   [[ "$output" =~ ^[a-z]+$ ]]
 }
+
+@test "hv::machine_has_default_name detects a curly apostrophe name" {
+  hv_stub scutil 0 "$(printf 'Mark\xe2\x80\x99s Laptop')"
+  run hv::machine_has_default_name
+  [ "$status" -eq 0 ]
+}
+
+@test "hv::machine_has_default_name detects a Mac Pro" {
+  hv_stub scutil 0 "Mac Pro"
+  run hv::machine_has_default_name
+  [ "$status" -eq 0 ]
+}
