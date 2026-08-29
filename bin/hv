@@ -50,15 +50,32 @@ hv::steps() {
 }
 
 # Echo the file implementing the named step, or nothing.
-# A step file that fails to parse (e.g. a syntax error) is reported as a
-# parse failure, not as an unknown step: silently treating it as "the name
-# never matched" would make a broken step file indistinguishable from a
-# typo in --only.
+# Return codes: 0 = found (path printed), 1 = no step has this name,
+# 2 = a candidate step file failed to parse (message already on stderr).
+# Distinguishing 1 from 2 matters because this runs inside a caller's
+# `file="$(hv::step_file ...)"` command substitution: that forks a
+# subshell, so calling hv::die (which calls `exit`) in here would only
+# exit the subshell, not the whole script -- the caller would still see a
+# nonzero status and, without this distinction, report "unknown step" on
+# top of the parse error already printed. So this function reports parse
+# failures itself, via hv::err, and returns 2 for the caller to check.
+#
+# The `.` builtin returns nonzero when the sourced file fails to parse, but
+# that alone does not abort the enclosing script -- a bare
+# `. "$f"; printf ...` would let the trailing printf succeed and mask the
+# failure. The inner script below captures `.`'s own exit status and exits
+# with it explicitly, after printing whatever name (if any) did get set, so
+# the parse failure survives as the exit status of the whole `bash -c`.
 hv::step_file() {
   local want="$1" f name err_file err rc
   for f in $(hv::steps); do
     err_file="$(mktemp)"
-    if name="$(bash -c ". '$f'; printf '%s' \"\$HV_STEP_NAME\"" 2>"$err_file")"; then
+    if name="$(bash -c '
+        . "$1" 2>"$2"
+        src_rc=$?
+        printf "%s" "${HV_STEP_NAME:-}"
+        exit "$src_rc"
+      ' _ "$f" "$err_file")"; then
       rc=0
     else
       rc=$?
@@ -66,7 +83,8 @@ hv::step_file() {
     err="$(tr '\n' ' ' < "$err_file")"
     rm -f "$err_file"
     if [ "$rc" -ne 0 ]; then
-      hv::die "failed to parse step file: $f${err:+ -- ${err% }}"
+      hv::err "failed to parse step file: $f${err:+ -- ${err% }}"
+      return 2
     fi
     [ "$name" = "$want" ] && { printf '%s\n' "$f"; return 0; }
   done
@@ -96,9 +114,17 @@ hv::step_invoke() {
 }
 
 hv::cmd_setup() {
-  local only="${1:-}" file
+  local only="${1:-}" file rc
   if [ -n "$only" ]; then
-    file="$(hv::step_file "$only")" || hv::die "unknown step: $only"
+    if file="$(hv::step_file "$only")"; then
+      rc=0
+    else
+      rc=$?
+    fi
+    # rc 2 means hv::step_file already reported a parse failure on stderr;
+    # anything else nonzero means no step by this name exists.
+    [ "$rc" -eq 2 ] && return 1
+    [ "$rc" -eq 0 ] || hv::die "unknown step: $only"
     hv::step_invoke "$file" run
     return $?
   fi

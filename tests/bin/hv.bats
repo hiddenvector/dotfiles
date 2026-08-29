@@ -116,7 +116,12 @@ STEP
 }
 
 @test "a step file that fails to parse is not reported as unknown" {
-  echo 'this is ( not valid bash' > "$HV_STEPS_DIR/40-bad.sh"
-  run "$HV_ROOT/bin/hv" setup --only alpha
-  [[ "$stderr$output" != *"unknown step: alpha"* ]]
+  # Looked up by the name this file *would* declare if it parsed -- no
+  # other step provides that name, so a lookup that merely treats a parse
+  # failure as "didn't match" falls through to a false "unknown step: bad".
+  echo 'this is ( not valid bash' > "$HV_STEPS_DIR/05-bad.sh"
+  run "$HV_ROOT/bin/hv" setup --only bad
+  [ "$status" -ne 0 ]
+  [[ "$stderr$output" == *"05-bad.sh"* ]]
+  [[ "$stderr$output" != *"unknown step: bad"* ]]
 }
