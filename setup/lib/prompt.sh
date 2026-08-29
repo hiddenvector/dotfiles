@@ -7,9 +7,7 @@ hv::ask() {
     printf '%s\n' "$default"
     return 0
   fi
-  if [ -t 0 ]; then
-    printf '       %s [%s]: ' "$question" "$default" >&2
-  fi
+  printf '       %s [%s]: ' "$question" "$default" >&2
   read -r answer || true
   printf '%s\n' "${answer:-$default}"
 }
@@ -22,9 +20,7 @@ hv::confirm() {
   fi
   local hint="[y/N]"
   [ "$default" = "y" ] && hint="[Y/n]"
-  if [ -t 0 ]; then
-    printf '       %s %s: ' "$question" "$hint" >&2
-  fi
+  printf '       %s %s: ' "$question" "$hint" >&2
   read -r answer || true
   answer="${answer:-$default}"
   case "$answer" in [Yy]*) return 0 ;; *) return 1 ;; esac
@@ -34,9 +30,7 @@ hv::confirm() {
 # be able to trigger these; with no input available, decline.
 hv::confirm_always() {
   local question="$1" answer=""
-  if [ -t 0 ]; then
-    printf '       %s [y/N]: ' "$question" >&2
-  fi
+  printf '       %s [y/N]: ' "$question" >&2
   read -r answer || return 1
   case "$answer" in [Yy]*) return 0 ;; *) return 1 ;; esac
 }
