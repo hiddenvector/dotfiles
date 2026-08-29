@@ -11,6 +11,10 @@ hv_setup_sandbox() {
   export HV_STUB_LOG="$BATS_TEST_TMPDIR/stub.log"
   export HV_DRY_RUN=0
   export HV_YES=0
+  # Capture real git before modifying PATH, so stub cannot recurse into itself.
+  local real_git
+  real_git="$(command -v git)"
+  export HV_REAL_GIT="$real_git"
   mkdir -p "$HOME" "$HV_STUB_DIR"
   : > "$HV_STUB_LOG"
   PATH="$HV_STUB_DIR:$PATH"
@@ -34,13 +38,15 @@ STUB
 # deny stub by default; a test that legitimately needs one calls hv_stub to
 # override it. A forgotten stub then fails loudly instead of mutating the
 # developer's machine.
-HV_DANGEROUS_COMMANDS="sudo scutil defaults killall brew gh git-lfs
+HV_DANGEROUS_COMMANDS="sudo scutil defaults killall brew gh git-lfs curl wget
 xcode-select bioutil profiles networksetup systemsetup launchctl
-fnm npm pnpm pyenv uv code claude pre-commit"
+fnm npm pnpm pyenv uv code claude pre-commit ssh-keygen"
 
 hv_deny_dangerous() {
   local cmd
   for cmd in $HV_DANGEROUS_COMMANDS; do
+    # Skip git — it gets a pass-through stub below
+    [ "$cmd" = "git" ] && continue
     cat > "$HV_STUB_DIR/$cmd" <<DENY
 #!/usr/bin/env bash
 echo "REFUSED: test invoked un-stubbed '$cmd' \$*" >> "$HV_STUB_LOG"
@@ -49,6 +55,20 @@ exit 111
 DENY
     chmod +x "$HV_STUB_DIR/$cmd"
   done
+
+  # git is special: local repo operations under $BATS_TEST_TMPDIR are safe and
+  # several tests rely on them. Only the network subcommands are denied.
+  cat > "$HV_STUB_DIR/git" <<GITDENY
+#!/usr/bin/env bash
+case "\${1:-}" in
+  clone|push|fetch|pull|remote|submodule)
+    echo "REFUSED: test invoked network git \$*" >> "$HV_STUB_LOG"
+    echo "REFUSED: test invoked network git \$*" >&2
+    exit 111 ;;
+esac
+exec "$HV_REAL_GIT" "\$@"
+GITDENY
+  chmod +x "$HV_STUB_DIR/git"
 }
 
 # Assert a stubbed command was called with the given argument substring.

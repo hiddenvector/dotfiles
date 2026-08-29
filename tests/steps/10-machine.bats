@@ -97,3 +97,20 @@ SUDO_PASSTHROUGH
   [ "$status" -eq 111 ]
   [[ "$stderr$output" == *"REFUSED"* ]]
 }
+
+@test "dry run does not rename the machine or claim it did" {
+  hv_stub scutil 0 "Marks-MacBook-Pro"
+  HV_DRY_RUN=1
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  hv_assert_not_called "--set ComputerName"
+}
+
+@test "git clone is refused but local git still works" {
+  run git clone https://example.com/repo /tmp/nope
+  [ "$status" -eq 111 ]
+  cd "$BATS_TEST_TMPDIR" || return 1
+  run git init -q scratch
+  [ "$status" -eq 0 ]
+}
