@@ -9,6 +9,10 @@ hv::_clt_present() { xcode-select -p >/dev/null 2>&1; }
 hv::_macos_major() { sw_vers -productVersion 2>/dev/null | cut -d. -f1; }
 
 hv_step_check() {
+  local major
+  major="$(hv::_macos_major)"
+  [ -n "$major" ] && [ "$major" -ge 14 ] 2>/dev/null || return 1
+  [ "$(hv::arch)" = "arm64" ] || return 1
   hv::_clt_present
 }
 
@@ -27,6 +31,10 @@ hv_step_run() {
   hv::ok "macOS $major  $arch"
 
   if ! hv::_clt_present; then
+    if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+      hv::warn "Command Line Tools are missing — a real run would install them and stop here"
+      return 0
+    fi
     hv::log "Command Line Tools missing — installing (GUI prompt)…"
     hv::run xcode-select --install || true
     hv::die "rerun hv setup once Command Line Tools finish installing"
@@ -36,7 +44,7 @@ hv_step_run() {
   if hv::is_admin; then
     hv::ok "admin rights"
   else
-    hv::warn "admin rights: limited — system steps will be skipped"
+    hv::warn "admin rights: limited — steps needing sudo will warn and skip"
   fi
 
   hv::is_managed && hv::warn "this machine is MDM-managed"

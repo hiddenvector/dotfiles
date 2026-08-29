@@ -57,6 +57,30 @@ setup() {
   [[ "$stderr$output" == *"admin"* ]]
 }
 
+@test "check fails on an unsupported macOS version even when CLT is present" {
+  hv_stub sw_vers 0 "13.6"
+  source "$HV_ROOT/setup/steps/00-preflight.sh"
+  run hv_step_check
+  [ "$status" -eq 1 ]
+}
+
+@test "check fails on a non-arm64 machine even when CLT is present" {
+  hv_stub uname 0 "x86_64"
+  source "$HV_ROOT/setup/steps/00-preflight.sh"
+  run hv_step_check
+  [ "$status" -eq 1 ]
+}
+
+@test "dry run does not abort when Command Line Tools are missing" {
+  hv_stub xcode-select 1 ""
+  HV_DRY_RUN=1
+  source "$HV_ROOT/setup/steps/00-preflight.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  [[ "$stderr$output" == *"would install"* ]]
+  hv_assert_not_called "xcode-select --install"
+}
+
 @test "step scope is system" {
   source "$HV_ROOT/setup/steps/00-preflight.sh"
   [ "$HV_STEP_SCOPE" = "system" ]
