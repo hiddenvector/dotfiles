@@ -11,13 +11,13 @@ setup() {
 HV_STEP_NAME="alpha"
 HV_STEP_SCOPE="user"
 hv_step_check() { [ -f "$HOME/alpha.done" ]; }
-hv_step_run() { echo ran-alpha; touch "$HOME/alpha.done"; }
+hv_step_run() { echo ran-alpha; hv::run touch "$HOME/alpha.done"; }
 STEP
   cat > "$HV_STEPS_DIR/20-beta.sh" <<'STEP'
 HV_STEP_NAME="beta"
 HV_STEP_SCOPE="system"
 hv_step_check() { [ -f "$HOME/beta.done" ]; }
-hv_step_run() { echo ran-beta; touch "$HOME/beta.done"; }
+hv_step_run() { echo ran-beta; hv::run touch "$HOME/beta.done"; }
 STEP
 }
 
@@ -76,6 +76,12 @@ STEP
 @test "hv setup --dry-run mutates nothing" {
   run "$HV_ROOT/bin/hv" setup --dry-run
   [ ! -f "$HOME/alpha.done" ]
+}
+
+@test "hv setup --dry-run previews the commands, not just the step names" {
+  run "$HV_ROOT/bin/hv" setup --dry-run
+  [ ! -f "$HOME/alpha.done" ]
+  [[ "$output" == *"would run: touch"* ]]
 }
 
 @test "step variables do not leak between steps" {

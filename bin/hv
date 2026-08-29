@@ -43,8 +43,10 @@ USAGE
 }
 
 hv::steps() {
-  # shellcheck disable=SC2012 # filenames are controlled (NN-name.sh); ls|sort gives simple, correct filename order.
-  ls "$HV_STEPS_DIR"/*.sh 2>/dev/null | sort
+  local f
+  for f in "$HV_STEPS_DIR"/*.sh; do
+    [ -f "$f" ] && printf '%s\n' "$f"
+  done
 }
 
 # Echo the file implementing the named step, or nothing.
@@ -58,8 +60,9 @@ hv::step_file() {
 }
 
 # Run one step file. mode is "check", "run", or "converge".
-# A step's hv_step_run may mutate directly instead of going through hv::run,
-# so --dry-run is enforced here rather than trusted to each step.
+# --dry-run is enforced by each step's own use of hv::run, not here: that is
+# what lets `hv setup --dry-run` preview the actual commands a step would
+# execute instead of just naming which steps are drifted.
 hv::step_invoke() {
   local file="$1" mode="$2"
   (
@@ -67,22 +70,12 @@ hv::step_invoke() {
     . "$file"
     case "$mode" in
       check) hv_step_check ;;
-      run)
-        if [ "${HV_DRY_RUN:-0}" = "1" ]; then
-          hv::log "would run: $HV_STEP_NAME"
-        else
-          hv_step_run
-        fi
-        ;;
+      run)   hv_step_run ;;
       converge)
         if hv_step_check >/dev/null 2>&1; then
           exit 0
         fi
-        if [ "${HV_DRY_RUN:-0}" = "1" ]; then
-          hv::log "would run: $HV_STEP_NAME"
-        else
-          hv_step_run
-        fi
+        hv_step_run
         ;;
     esac
   )
