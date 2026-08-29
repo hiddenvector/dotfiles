@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve this script's real location even when symlinked to ~/.local/bin/hv.
+_hv_self="${BASH_SOURCE[0]}"
+while [ -L "$_hv_self" ]; do
+  _hv_dir="$(cd "$(dirname "$_hv_self")" && pwd)"
+  _hv_self="$(readlink "$_hv_self")"
+  case "$_hv_self" in /*) ;; *) _hv_self="$_hv_dir/$_hv_self" ;; esac
+done
+HV_ROOT="$(cd "$(dirname "$_hv_self")/.." && pwd)"
+export HV_ROOT
+
+HV_STEPS_DIR="${HV_STEPS_DIR:-$HV_ROOT/setup/steps}"
+
+for _lib in log link machine config prompt; do
+  # shellcheck disable=SC1090
+  . "$HV_ROOT/setup/lib/$_lib.sh"
+done
+
+HV_DRY_RUN="${HV_DRY_RUN:-0}"
+HV_YES="${HV_YES:-0}"
+export HV_DRY_RUN HV_YES
+
+hv::usage() {
+  cat >&2 <<'USAGE'
+usage: hv <command> [options]
+
+commands:
+  setup           converge this machine to the declared state
+  check           report drift; mutates nothing; exits 1 if drifted
+  update          git pull, then converge
+  identity        re-run the identity step
+  machine         re-run machine name and module selection
+  overlay init    create and wire up a personal overlay repo
+  cheatsheet      print usage docs for installed modules
+
+options:
+  --only <name>   run only the named step
+  --dry-run       print what would change, change nothing
+  --yes           accept defaults without prompting
+USAGE
+}
+
+hv::steps() {
+  # shellcheck disable=SC2012 # filenames are controlled (NN-name.sh); ls|sort gives simple, correct filename order.
+  ls "$HV_STEPS_DIR"/*.sh 2>/dev/null | sort
+}
+
+# Echo the file implementing the named step, or nothing.
+hv::step_file() {
+  local want="$1" f name
+  for f in $(hv::steps); do
+    name="$(bash -c ". '$f'; printf '%s' \"\$HV_STEP_NAME\"" 2>/dev/null)"
+    [ "$name" = "$want" ] && { printf '%s\n' "$f"; return 0; }
+  done
+  return 1
+}
+
+# Run one step file. mode is "check", "run", or "converge".
+# A step's hv_step_run may mutate directly instead of going through hv::run,
+# so --dry-run is enforced here rather than trusted to each step.
+hv::step_invoke() {
+  local file="$1" mode="$2"
+  (
+    # shellcheck disable=SC1090
+    . "$file"
+    case "$mode" in
+      check) hv_step_check ;;
+      run)
+        if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+          hv::log "would run: $HV_STEP_NAME"
+        else
+          hv_step_run
+        fi
+        ;;
+      converge)
+        if hv_step_check >/dev/null 2>&1; then
+          exit 0
+        fi
+        if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+          hv::log "would run: $HV_STEP_NAME"
+        else
+          hv_step_run
+        fi
+        ;;
+    esac
+  )
+}
+
+hv::cmd_setup() {
+  local only="${1:-}" file
+  if [ -n "$only" ]; then
+    file="$(hv::step_file "$only")" || hv::die "unknown step: $only"
+    hv::step_invoke "$file" run
+    return $?
+  fi
+  for file in $(hv::steps); do
+    hv::step_invoke "$file" converge
+  done
+}
+
+hv::cmd_check() {
+  local file drifted=0
+  for file in $(hv::steps); do
+    hv::step_invoke "$file" check || drifted=1
+  done
+  return "$drifted"
+}
+
+main() {
+  local cmd="${1:-}" only=""
+  [ $# -gt 0 ] && shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --only) only="${2:-}"; shift 2 ;;
+      --dry-run) HV_DRY_RUN=1; export HV_DRY_RUN; shift ;;
+      --yes) HV_YES=1; export HV_YES; shift ;;
+      *) shift ;;
+    esac
+  done
+
+  case "$cmd" in
+    setup)     hv::cmd_setup "$only" ;;
+    check)     hv::cmd_check ;;
+    update)    hv::run git -C "$HV_ROOT" pull --ff-only && hv::cmd_setup "" ;;
+    identity)  hv::cmd_setup identity ;;
+    machine)   hv::cmd_setup machine ;;
+    overlay)   hv::cmd_setup overlay ;;
+    cheatsheet) hv::cmd_setup cheatsheet ;;
+    ""|help|-h|--help) hv::usage; return 1 ;;
+    *) hv::err "unknown command: $cmd"; hv::usage; return 1 ;;
+  esac
+}
+
+main "$@"
