@@ -149,6 +149,41 @@ This keeps employer-specific configuration — corporate CA cert paths, internal
 registries, GHE credential helpers — in a repo owned by that employer, never in the
 Hidden Vector repo, while still being version-controlled and synced across machines.
 
+Overlays are not only for employer machines. Every person is expected to have a
+**personal overlay** holding their own packages, aliases and git preferences. Without
+one, personal configuration accumulates in the untracked `~/.config/hv/local.Brewfile`
+and `~/.zshrc.d/local.zsh`, which do not survive a machine wipe and do not sync between
+a person's own Macs.
+
+### Creating an overlay (step 35)
+
+Setup must be able to *create* an overlay, not merely consume one — asking a newcomer
+for an overlay URL they do not have is a dead end. Step 35 handles three cases:
+
+1. **Already configured** — verify the clone is present and current.
+2. **Exists on GitHub but not configured** — `<handle>/dotfiles` exists and matches the
+   overlay contract, so offer it as the pre-filled default. This is what makes a
+   person's second machine cheap: accept the prompt and their first machine's packages
+   and aliases arrive.
+3. **Does not exist** — explain what an overlay is, then offer to create it:
+   `gh repo create`, clone to `~/Developer/github.com/<handle>/dotfiles`, scaffold the
+   contract directories with a README documenting each, and push.
+
+On creation, if `~/.config/hv/local.Brewfile` or `~/.zshrc.d/local.zsh` hold real
+content, offer to move it into the new overlay and commit. This turns an abstract
+mechanism into a visible payoff and is the moment the concept is best taught.
+
+The scaffolded README is deliberately instructional: for someone new to the workflow,
+the overlay is a low-stakes repo whose entire purpose is edit → commit → push → pull on
+the other machine.
+
+**Guardrails.** `gh repo create` publishes to the internet, so it always confirms
+explicitly, defaults to **private**, and is never triggered by `--yes`.
+
+This step must run after step 30, since detecting or creating a repo requires `gh`
+authentication, and before step 40, since the overlay's `git/config` is `[include]`d
+when the gitconfig is linked.
+
 Consequently `HV_RESTRICTED` stays narrow: it means only "do not shell out to
 `code --install-extension`", which corporate SSL inspection breaks. Everything else
 corp-specific belongs in the overlay.
@@ -166,6 +201,7 @@ Single entrypoint, symlinked from `bin/hv` to `~/.local/bin/hv`, which is alread
 | `hv update` | `git pull` then converge |
 | `hv identity` | re-run the identity step |
 | `hv machine` | re-run machine name / module selection |
+| `hv overlay init` | create and wire up a personal overlay repo |
 
 Global flags: `--dry-run`, `--only <step>`, `--yes` (accept all defaults).
 
@@ -178,9 +214,10 @@ typed exactly once per machine.
 |---|---|---|---|
 | 00 | preflight — macOS version, arch, admin rights, Command Line Tools | system | — |
 | 05 | Touch ID for sudo (`/etc/pam.d/sudo_local`) | system | once, by password |
-| 10 | machine — name, modules, restricted, overlay | system + user | Touch ID |
+| 10 | machine — name, modules, restricted | system + user | Touch ID |
 | 20 | Homebrew install + `core.Brewfile` | system | Touch ID |
 | 30 | `gh auth login` → identity → signing key | user | — |
+| 35 | overlay — detect, create, or configure | user | — |
 | 40 | symlinks | user | — |
 | 50 | module + local + overlay Brewfiles, VS Code extensions | user | Touch ID |
 | 60 | macOS defaults | user | — |
@@ -339,6 +376,9 @@ overlay contract, so the last full-dotfiles state stays trivially checkout-able.
 ## Verification
 
 - `hv check` passes on a converged machine and exits nonzero on a drifted one.
+- `hv check` warns — informationally, without prompting — when `local.Brewfile` or
+  `local.zsh` hold real content and no overlay is configured. Untracked personal
+  configuration that will not survive a machine wipe is drift.
 - `hv setup` run twice in a row produces no changes on the second run.
 - `hv setup --dry-run` mutates nothing.
 - Each step is independently re-runnable via `--only`.
