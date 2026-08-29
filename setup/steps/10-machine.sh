@@ -37,6 +37,13 @@ hv::_choose_modules() {
 hv_step_run() {
   hv::step 10 "machine"
 
+  # Dry-run mode: state what we would do and exit early.
+  if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+    hv::log "would prompt for machine name and modules"
+    hv::log "would write config to $(hv::config_file)"
+    return 0
+  fi
+
   local current suggestion name
   current="$(hv::machine_name)"
 
