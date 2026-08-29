@@ -1,0 +1,78 @@
+#!/usr/bin/env bats
+
+load ../helper
+
+setup() {
+  hv_setup_sandbox
+  source "$HV_ROOT/setup/lib/log.sh"
+  source "$HV_ROOT/setup/lib/machine.sh"
+  source "$HV_ROOT/setup/lib/config.sh"
+  source "$HV_ROOT/setup/lib/prompt.sh"
+  hv_stub scutil 0 "prometheus"
+  hv_stub profiles 0 "MDM enrollment: No"
+  export HV_YES=1
+}
+
+@test "check fails when no config exists" {
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  run hv_step_check
+  [ "$status" -eq 1 ]
+}
+
+@test "check passes once modules are recorded" {
+  hv::config_set HV_MODULES "core web"
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  run hv_step_check
+  [ "$status" -eq 0 ]
+}
+
+@test "run leaves an already-named machine alone" {
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  run hv_step_run
+  hv_assert_not_called "--set ComputerName"
+}
+
+@test "run renames a machine with a stock name" {
+  hv_stub scutil 0 "Marks-MacBook-Pro"
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  run hv_step_run
+  hv_assert_called "--set ComputerName"
+  hv_assert_called "--set HostName"
+  hv_assert_called "--set LocalHostName"
+}
+
+@test "run records modules to config" {
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  hv_step_run
+  hv::config_load
+  [[ "$HV_MODULES" == *"core"* ]]
+}
+
+@test "run marks an MDM machine restricted automatically" {
+  hv_stub profiles 0 "MDM enrollment: Yes"
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  hv_step_run
+  run hv::config_get HV_RESTRICTED
+  [ "$output" = "1" ]
+}
+
+@test "run degrades when scutil is blocked by MDM" {
+  hv_stub scutil 1 ""
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  [[ "$stderr$output" == *"blocked"* ]]
+}
+
+@test "run is idempotent" {
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  hv_step_run
+  local first; first="$(cat "$(hv::config_file)")"
+  hv_step_run
+  [ "$first" = "$(cat "$(hv::config_file)")" ]
+}
+
+@test "step scope is system" {
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  [ "$HV_STEP_SCOPE" = "system" ]
+}
