@@ -1,0 +1,4 @@
+# Public SSH signing keys for Hidden Vector members. Public information.
+# Appended to each person's own keys to produce ~/.config/git/allowed-signers.
+# Add a line per member per machine:
+#   email namespaces="git" ssh-ed25519 AAAA...
