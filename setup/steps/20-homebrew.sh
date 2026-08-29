@@ -10,6 +10,14 @@ hv::_brew() { "$HV_BREW_PREFIX/bin/brew" "$@"; }
 
 hv::_brew_installed() { [ -x "$HV_BREW_PREFIX/bin/brew" ]; }
 
+hv::_install_homebrew() {
+  if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+    hv::log "would run: the Homebrew installer from raw.githubusercontent.com"
+    return 0
+  fi
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+}
+
 hv_step_check() {
   hv::_brew_installed || return 1
   hv::_brew bundle check --file "$HV_ROOT/brew/core.Brewfile" >/dev/null 2>&1
@@ -38,7 +46,7 @@ hv_step_run() {
 
   if ! hv::_brew_installed; then
     hv::log "Installing Homebrew…"
-    hv::run bash -c 'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash'
+    hv::run hv::_install_homebrew
   fi
 
   if [ ! -w "$HV_BREW_PREFIX" ]; then
@@ -49,7 +57,10 @@ hv_step_run() {
     }
   fi
 
-  hv::run hv::_brew bundle --file "$HV_ROOT/brew/core.Brewfile"
-  hv::ok "core packages"
+  if hv::run hv::_brew bundle --file "$HV_ROOT/brew/core.Brewfile"; then
+    hv::ok "core packages"
+  else
+    hv::warn "core package installation failed — run 'hv setup --only homebrew' after fixing"
+  fi
   return 0
 }

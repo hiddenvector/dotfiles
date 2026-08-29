@@ -16,19 +16,6 @@ setup() {
   export HV_YES=1
 }
 
-# Helper to create a logging stub at a specific path
-hv_stub_at_path() {
-  local path="$1" name="$2" code="${3:-0}" out="${4:-}"
-  mkdir -p "$(dirname "$path")"
-  cat > "$path" <<STUB
-#!/usr/bin/env bash
-echo "$name \$*" >> "\$HV_STUB_LOG"
-[ -n "$out" ] && printf '%s\n' "$out"
-exit $code
-STUB
-  chmod +x "$path"
-}
-
 @test "check fails when brew is not installed" {
   rm -rf "$HV_BREW_PREFIX"
   source "$HV_ROOT/setup/steps/20-homebrew.sh"
@@ -95,6 +82,15 @@ STUB
   for f in git git-delta gh starship fzf ripgrep bat eza zoxide; do
     grep -q "\"$f\"" "$HV_ROOT/brew/core.Brewfile"
   done
+}
+
+@test "run warns when bundle installation fails but returns 0" {
+  hv_stub_at_path "$HV_BREW_PREFIX/bin/brew" "brew" 1
+  source "$HV_ROOT/setup/steps/20-homebrew.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  [[ "$stderr$output" == *"installation failed"* ]]
+  [[ "$stderr$output" != *"✓ core packages"* ]]
 }
 
 @test "dry run does not install Homebrew or packages" {

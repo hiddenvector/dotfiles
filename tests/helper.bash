@@ -96,3 +96,16 @@ hv_assert_not_called() {
 hv_assert_no_refusals() {
   ! grep -q '^REFUSED:' "$HV_STUB_LOG"
 }
+
+# Create a logging stub at a specific path (for prefix-relative binaries).
+hv_stub_at_path() {
+  local path="$1" name="$2" code="${3:-0}" out="${4:-}"
+  mkdir -p "$(dirname "$path")"
+  cat > "$path" <<STUB
+#!/usr/bin/env bash
+echo "$name \$*" >> "\$HV_STUB_LOG"
+[ -n "$out" ] && printf '%s\n' "$out"
+exit $code
+STUB
+  chmod +x "$path"
+}
