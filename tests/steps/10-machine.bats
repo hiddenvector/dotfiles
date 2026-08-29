@@ -8,6 +8,7 @@ setup() {
   source "$HV_ROOT/setup/lib/machine.sh"
   source "$HV_ROOT/setup/lib/config.sh"
   source "$HV_ROOT/setup/lib/prompt.sh"
+  hv_stub sudo 0 ""
   hv_stub scutil 0 "prometheus"
   hv_stub profiles 0 "MDM enrollment: No"
   export HV_YES=1
@@ -57,6 +58,14 @@ setup() {
 }
 
 @test "run degrades when scutil is blocked by MDM" {
+  # Create a sudo stub that passes through to scutil for this test
+  cat > "$HV_STUB_DIR/sudo" <<SUDO_PASSTHROUGH
+#!/usr/bin/env bash
+echo "sudo \$*" >> "$HV_STUB_LOG"
+"\$@"
+SUDO_PASSTHROUGH
+  chmod +x "$HV_STUB_DIR/sudo"
+
   hv_stub scutil 1 ""
   source "$HV_ROOT/setup/steps/10-machine.sh"
   run hv_step_run
@@ -75,4 +84,16 @@ setup() {
 @test "step scope is system" {
   source "$HV_ROOT/setup/steps/10-machine.sh"
   [ "$HV_STEP_SCOPE" = "system" ]
+}
+
+@test "no test in this file reaches a real system command" {
+  source "$HV_ROOT/setup/steps/10-machine.sh"
+  hv_step_run
+  hv_assert_no_refusals
+}
+
+@test "an un-stubbed dangerous command is refused, not executed" {
+  run env PATH="$HV_STUB_DIR:$PATH" networksetup -setairportpower en0 off
+  [ "$status" -eq 111 ]
+  [[ "$stderr$output" == *"REFUSED"* ]]
 }
