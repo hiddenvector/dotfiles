@@ -50,10 +50,24 @@ hv::steps() {
 }
 
 # Echo the file implementing the named step, or nothing.
+# A step file that fails to parse (e.g. a syntax error) is reported as a
+# parse failure, not as an unknown step: silently treating it as "the name
+# never matched" would make a broken step file indistinguishable from a
+# typo in --only.
 hv::step_file() {
-  local want="$1" f name
+  local want="$1" f name err_file err rc
   for f in $(hv::steps); do
-    name="$(bash -c ". '$f'; printf '%s' \"\$HV_STEP_NAME\"" 2>/dev/null)"
+    err_file="$(mktemp)"
+    if name="$(bash -c ". '$f'; printf '%s' \"\$HV_STEP_NAME\"" 2>"$err_file")"; then
+      rc=0
+    else
+      rc=$?
+    fi
+    err="$(tr '\n' ' ' < "$err_file")"
+    rm -f "$err_file"
+    if [ "$rc" -ne 0 ]; then
+      hv::die "failed to parse step file: $f${err:+ -- ${err% }}"
+    fi
     [ "$name" = "$want" ] && { printf '%s\n' "$f"; return 0; }
   done
   return 1
@@ -88,8 +102,19 @@ hv::cmd_setup() {
     hv::step_invoke "$file" run
     return $?
   fi
+  # Contract: any unguarded failing command inside hv_step_run stops the
+  # whole run, not just that step. Steps that cannot do their job (Touch ID
+  # blocked by MDM, a non-admin account, ...) must warn and return 0 --
+  # reserve a nonzero return from hv_step_run for genuinely unrecoverable
+  # conditions. When one does return nonzero here, we stop rather than
+  # silently skip it: continuing past a real failure would let `hv setup`
+  # report success on a machine that is only half-converged.
   for file in $(hv::steps); do
-    hv::step_invoke "$file" converge
+    if ! hv::step_invoke "$file" converge; then
+      hv::err "step failed: $(basename "$file")"
+      hv::log "Remaining steps were not run. Fix the cause and re-run: hv setup"
+      return 1
+    fi
   done
 }
 

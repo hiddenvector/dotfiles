@@ -100,3 +100,23 @@ STEP
   [ "$status" -ne 0 ]
   [[ "$stderr$output" == *"usage"* ]]
 }
+
+@test "hv setup reports which step failed and that the rest were skipped" {
+  cat > "$HV_STEPS_DIR/05-broken.sh" <<'STEP'
+HV_STEP_NAME="broken"
+HV_STEP_SCOPE="user"
+hv_step_check() { return 1; }
+hv_step_run() { return 3; }
+STEP
+  run "$HV_ROOT/bin/hv" setup
+  [ "$status" -ne 0 ]
+  [[ "$stderr$output" == *"05-broken"* ]]
+  [[ "$stderr$output" == *"Remaining steps were not run"* ]]
+  [[ "$output" != *"ran-alpha"* ]]
+}
+
+@test "a step file that fails to parse is not reported as unknown" {
+  echo 'this is ( not valid bash' > "$HV_STEPS_DIR/40-bad.sh"
+  run "$HV_ROOT/bin/hv" setup --only alpha
+  [[ "$stderr$output" != *"unknown step: alpha"* ]]
+}
