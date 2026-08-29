@@ -53,7 +53,7 @@ setup() {
 
 @test "run uploads the signing key to GitHub" {
   source "$HV_ROOT/setup/steps/30-identity.sh"
-  run hv_step_run
+  run hv_step_run <<< "y"
   hv_assert_called "ssh-key add"
   hv_assert_called "--type signing"
 }
@@ -88,4 +88,36 @@ setup() {
 @test "step scope is user" {
   source "$HV_ROOT/setup/steps/30-identity.sh"
   [ "$HV_STEP_SCOPE" = "user" ]
+}
+
+@test "a private GitHub email does not become the string null" {
+  hv_stub gh 0 "null"
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  hv_step_run
+  ! grep -q 'email = null' "$HV_GIT_CONFIG_HOME/identity"
+  ! grep -qE 'email =\s*$' "$HV_GIT_CONFIG_HOME/identity"
+}
+
+@test "the signing key is not uploaded without an explicit confirmation" {
+  export HV_YES=1
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  run hv_step_run < /dev/null
+  hv_assert_not_called "ssh-key add"
+}
+
+@test "a failed upload warns and prints the manual command" {
+  hv_stub gh 1 "auth_error" "id: 1" "login: testuser" "email: test@example.com"
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  run hv_step_run <<< "y"
+  [[ "$output" == *"upload failed"* ]] || [[ "$stderr" == *"upload failed"* ]]
+  [[ "$output" == *"gh ssh-key add"* ]] || [[ "$stderr" == *"gh ssh-key add"* ]]
+}
+
+@test "dry run generates no key and claims nothing" {
+  export HV_DRY_RUN=1
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  hv_assert_not_called "ssh-keygen"
+  hv_assert_not_called "ssh-key add"
 }

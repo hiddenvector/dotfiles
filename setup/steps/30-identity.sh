@@ -17,6 +17,24 @@ hv_step_check() {
 
 hv::_gh_authed() { gh auth status >/dev/null 2>&1; }
 
+hv::_gh_field() {
+  local v
+  v="$(gh api user --jq "$1" 2>/dev/null || true)"
+  [ "$v" = "null" ] && v=""
+  printf '%s\n' "$v"
+}
+
+hv::_default_email() {
+  local email id login
+  email="$(hv::_gh_field .email)"
+  if [ -z "$email" ]; then
+    id="$(hv::_gh_field .id)"
+    login="$(hv::_gh_field .login)"
+    [ -n "$login" ] && email="${id}+${login}@users.noreply.github.com"
+  fi
+  printf '%s\n' "$email"
+}
+
 hv::_write_identity() {
   local file="$1" name="$2" email="$3" key="$4"
   hv::run mkdir -p "$(dirname "$file")"
@@ -48,8 +66,13 @@ hv_step_run() {
   hv::_gh_authed || hv::run gh auth login
 
   local name email hv_email key
-  name="$(hv::ask "Name" "$(gh api user --jq .name 2>/dev/null || echo "")")"
-  email="$(hv::ask "Email" "$(gh api user --jq .email 2>/dev/null || echo "")")"
+  name="$(hv::ask "Name" "$(hv::_gh_field .name)")"
+  email="$(hv::ask "Email" "$(hv::_default_email)")"
+
+  if [ -z "$email" ]; then
+    hv::warn "email cannot be empty — cannot write identity file"
+    return 0
+  fi
 
   key="$(hv::_signing_key)"
   if [ ! -f "$key" ]; then
@@ -57,11 +80,22 @@ hv_step_run() {
     hv::log "(One key per machine — private keys never move between Macs.)"
     hv::run mkdir -p "$HOME/.ssh"
     hv::run ssh-keygen -t ed25519 -N "" -C "$(hv::machine_name) signing" -f "$key"
-    hv::run gh ssh-key add "$key.pub" --type signing \
-      --title "$(hv::machine_name) (signing)"
-    hv::ok "$key"
+
+    if hv::confirm_always "Upload this signing key to your GitHub account?"; then
+      if hv::run gh ssh-key add "$key.pub" --type signing \
+           --title "$(hv::machine_name) (signing)"; then
+        [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "uploaded to GitHub"
+      else
+        hv::warn "upload failed — add it manually:"
+        hv::log "  gh ssh-key add $key.pub --type signing --title \"$(hv::machine_name) (signing)\""
+      fi
+    else
+      hv::warn "not uploaded — commits will not verify until you add it:"
+      hv::log "  gh ssh-key add $key.pub --type signing --title \"$(hv::machine_name) (signing)\""
+    fi
+    [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "$key"
   else
-    hv::ok "signing key present"
+    [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "signing key present"
   fi
 
   hv::_write_identity "$HV_GIT_CONFIG_HOME/identity" "$name" "$email" "$key"
@@ -69,7 +103,7 @@ hv_step_run() {
   if hv::confirm "Different email for Hidden Vector client repos?" n; then
     hv_email="$(hv::ask "HV email" "$email")"
     hv::_write_identity "$HV_GIT_CONFIG_HOME/identity.hv" "$name" "$hv_email" "$key"
-    hv::ok "includeIf gitdir:~/Developer/github.com/hiddenvector/"
+    [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "includeIf gitdir:~/Developer/github.com/hiddenvector/"
   fi
 
   hv::_rebuild_allowed_signers "$email"
