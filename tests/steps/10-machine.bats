@@ -114,3 +114,24 @@ SUDO_PASSTHROUGH
   run git init -q scratch
   [ "$status" -eq 0 ]
 }
+
+@test "git -C with a network subcommand is refused" {
+  run git -C "$BATS_TEST_TMPDIR" push -u origin HEAD
+  [ "$status" -eq 111 ]
+  run git -C "$BATS_TEST_TMPDIR" pull --ff-only
+  [ "$status" -eq 111 ]
+}
+
+@test "git -C with a local subcommand still works" {
+  git init -q "$BATS_TEST_TMPDIR/scratch"
+  run git -C "$BATS_TEST_TMPDIR/scratch" status --porcelain
+  [ "$status" -eq 0 ]
+}
+
+@test "a commit message containing a denied word is not refused" {
+  git init -q "$BATS_TEST_TMPDIR/msg"
+  git -C "$BATS_TEST_TMPDIR/msg" config user.email t@t.t
+  git -C "$BATS_TEST_TMPDIR/msg" config user.name Test
+  run git -C "$BATS_TEST_TMPDIR/msg" commit -q --allow-empty -m "push the button"
+  [ "$status" -eq 0 ]
+}

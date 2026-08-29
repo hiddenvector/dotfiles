@@ -57,10 +57,22 @@ DENY
   done
 
   # git is special: local repo operations under $BATS_TEST_TMPDIR are safe and
-  # several tests rely on them. Only the network subcommands are denied.
+  # several tests rely on them. Only the network subcommands are denied. The
+  # subcommand is not necessarily $1 — git's global options come first, and
+  # some take a value that must be skipped.
   cat > "$HV_STUB_DIR/git" <<GITDENY
 #!/usr/bin/env bash
-case "\${1:-}" in
+sub=""
+skip=0
+for a in "\$@"; do
+  if [ "\$skip" = "1" ]; then skip=0; continue; fi
+  case "\$a" in
+    -C|-c|--git-dir|--work-tree|--namespace|--exec-path) skip=1; continue ;;
+    -*) continue ;;
+    *) sub="\$a"; break ;;
+  esac
+done
+case "\$sub" in
   clone|push|fetch|pull|remote|submodule)
     echo "REFUSED: test invoked network git \$*" >> "$HV_STUB_LOG"
     echo "REFUSED: test invoked network git \$*" >&2
