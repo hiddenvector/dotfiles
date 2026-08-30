@@ -125,3 +125,57 @@ STEP
   [[ "$stderr$output" == *"05-bad.sh"* ]]
   [[ "$stderr$output" != *"unknown step: bad"* ]]
 }
+
+@test "hv setup runs overlay steps after the base steps" {
+  mkdir -p "$HOME/overlay/steps"
+  cat > "$HOME/overlay/steps/50-extra.sh" <<'STEP'
+HV_STEP_NAME="extra"
+HV_STEP_SCOPE="user"
+hv_step_check() { return 1; }
+hv_step_run() { echo ran-extra; }
+STEP
+  mkdir -p "$HV_CONFIG_HOME"
+  printf 'HV_OVERLAY="%s"
+' "$HOME/overlay" > "$HV_CONFIG_HOME/config"
+  run "$HV_ROOT/bin/hv" setup
+  [[ "$output" == *"ran-extra"* ]]
+  [[ "${output%%ran-extra*}" == *"ran-beta"* ]]
+}
+
+@test "hv setup tolerates an overlay with no steps directory" {
+  mkdir -p "$HOME/overlay" "$HV_CONFIG_HOME"
+  printf 'HV_OVERLAY="%s"
+' "$HOME/overlay" > "$HV_CONFIG_HOME/config"
+  run "$HV_ROOT/bin/hv" setup
+  [ "$status" -eq 0 ]
+}
+
+@test "hv overlay runs the overlay step" {
+  cat > "$HV_STEPS_DIR/35-overlay.sh" <<'STEP'
+HV_STEP_NAME="overlay"
+HV_STEP_SCOPE="user"
+hv_step_check() { return 1; }
+hv_step_run() { echo ran-overlay; }
+STEP
+  run "$HV_ROOT/bin/hv" overlay
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ran-overlay"* ]]
+}
+
+@test "hv overlay init is equivalent to hv overlay" {
+  cat > "$HV_STEPS_DIR/35-overlay.sh" <<'STEP'
+HV_STEP_NAME="overlay"
+HV_STEP_SCOPE="user"
+hv_step_check() { return 1; }
+hv_step_run() { echo ran-overlay; }
+STEP
+  run "$HV_ROOT/bin/hv" overlay init
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ran-overlay"* ]]
+}
+
+@test "hv overlay rejects an unknown subcommand" {
+  run "$HV_ROOT/bin/hv" overlay bogus
+  [ "$status" -ne 0 ]
+  [[ "$stderr$output" == *"unknown overlay subcommand"* ]]
+}

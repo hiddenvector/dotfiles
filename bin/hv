@@ -43,10 +43,16 @@ USAGE
 }
 
 hv::steps() {
-  local f
+  local f overlay
   for f in "$HV_STEPS_DIR"/*.sh; do
     [ -f "$f" ] && printf '%s\n' "$f"
   done
+  overlay="$(hv::config_get HV_OVERLAY 2>/dev/null || true)"
+  if [ -n "$overlay" ] && [ "$overlay" != "none" ] && [ -d "$overlay/steps" ]; then
+    for f in "$overlay"/steps/*.sh; do
+      [ -f "$f" ] && printf '%s\n' "$f"
+    done
+  fi
 }
 
 # Echo the file implementing the named step, or nothing.
@@ -155,6 +161,19 @@ hv::cmd_check() {
 main() {
   local cmd="${1:-}" only=""
   [ $# -gt 0 ] && shift
+
+  # "overlay" takes an optional "init" subcommand; the two are equivalent.
+  # Anything else after "overlay" that isn't a recognized flag is rejected
+  # here -- otherwise the option loop below silently discards it and
+  # `hv overlay bogus` would quietly behave like plain `hv overlay`.
+  if [ "$cmd" = "overlay" ]; then
+    case "${1:-}" in
+      init) shift ;;
+      ""|--only|--dry-run|--yes) : ;;
+      *) hv::die "unknown overlay subcommand: $1 (expected: init)" ;;
+    esac
+  fi
+
   while [ $# -gt 0 ]; do
     case "$1" in
       --only) only="${2:-}"; shift 2 ;;
