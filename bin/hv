@@ -13,7 +13,7 @@ export HV_ROOT
 
 HV_STEPS_DIR="${HV_STEPS_DIR:-$HV_ROOT/setup/steps}"
 
-for _lib in log link machine config prompt; do
+for _lib in log link machine config prompt docs; do
   # shellcheck disable=SC1090
   . "$HV_ROOT/setup/lib/$_lib.sh"
 done
