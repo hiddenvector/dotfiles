@@ -27,6 +27,12 @@ setup() {
   case "$output" in *ripgrep*) return 1 ;; *) ;; esac
 }
 
+@test "cheatsheet rejects an unknown module name" {
+  run "$HV_ROOT/bin/hv" cheatsheet bogus
+  [ "$status" -ne 0 ]
+  case "$output" in *bogus*) ;; *) return 1 ;; esac
+}
+
 @test "USAGE.md is current" {
   source "$HV_ROOT/setup/lib/docs.sh"
   run hv::docs_current

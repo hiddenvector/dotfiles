@@ -142,11 +142,14 @@ the shell, prompt, and git layer everything else sits on top of.
 
 - **Homebrew** is the package manager `hv setup` uses to install everything
   in this module's (and every other enabled module's) `Brewfile` — `brew
-  bundle --file brew/<module>.Brewfile`. It's also where two more core
-  pieces come from at runtime: `brew --prefix`'s `share/zsh/site-functions`
-  is added to `fpath` for Homebrew-installed completions, and
-  zsh-autosuggestions/zsh-syntax-highlighting above are sourced straight
-  out of the Homebrew prefix rather than vendored into this repo.
+  bundle --file brew/<module>.Brewfile`. Two more core pieces come from it
+  at runtime, in different ways: Homebrew's Zsh completions directory is
+  hardcoded as `/opt/homebrew/share/zsh/site-functions` and added to
+  `fpath` directly, since this repo targets Apple Silicon Macs only — it is
+  not derived from `brew --prefix`. zsh-autosuggestions and
+  zsh-syntax-highlighting, by contrast, *are* located via
+  `BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix)}"` and sourced from
+  wherever that resolves, rather than vendored into this repo.
 
 ### `hv` itself
 

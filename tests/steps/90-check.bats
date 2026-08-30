@@ -15,10 +15,20 @@ setup() {
 }
 
 @test "docs_current is false when a fragment changes" {
-  echo "# drift" >> "$HV_ROOT/docs/usage/core.md"
+  # HV_ROOT points at the real checkout -- hv_setup_sandbox only sandboxes
+  # $HOME and $PATH, not the repo tree -- so this test mutates the real
+  # docs/usage/core.md. Restore its actual prior bytes rather than
+  # `git checkout --`, which restores from the index: an edit made to this
+  # file but not yet staged would otherwise be silently destroyed by this
+  # test. Restore happens before the assertion, so even a failing
+  # assertion here cannot leave the file mutated.
+  local frag="$HV_ROOT/docs/usage/core.md"
+  local backup="$BATS_TEST_TMPDIR/core.md.bak"
+  cp "$frag" "$backup"
+  printf '\n# drift\n' >> "$frag"
   run hv::docs_current
   local rc="$status"
-  git -C "$HV_ROOT" checkout -- docs/usage/core.md
+  cp "$backup" "$frag"
   [ "$rc" -eq 1 ]
 }
 

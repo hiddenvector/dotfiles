@@ -26,8 +26,21 @@ hv::docs_current() {
 }
 
 # Print only the fragments for the modules installed on this machine.
+# Returns 1 (printing nothing) if given a module name that names none of
+# hv::docs_order -- silently exiting 0 would read as "nothing to show"
+# rather than "no such module".
 hv::docs_cheatsheet() {
-  local want="${1:-}" m file
+  local want="${1:-}" m file known=0
+  if [ -n "$want" ] && [ "$want" != "all" ]; then
+    for m in $(hv::docs_order); do
+      if [ "$m" = "$want" ]; then
+        known=1
+      fi
+    done
+    if [ "$known" -ne 1 ]; then
+      return 1
+    fi
+  fi
   for m in $(hv::docs_order); do
     file="$HV_ROOT/docs/usage/$m.md"
     [ -f "$file" ] || continue

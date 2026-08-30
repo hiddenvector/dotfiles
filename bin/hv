@@ -174,11 +174,17 @@ hv::cmd_check() {
 # hv::cmd_setup means it can never be picked up by `hv::steps`/`hv setup`.
 hv::cmd_cheatsheet() {
   hv::config_load
+  local valid
   case "${1:-}" in
     --regenerate) hv::docs_generate; hv::ok "docs/USAGE.md regenerated" ;;
     --all) hv::docs_cheatsheet all ;;
     "") hv::docs_cheatsheet ;;
-    *) hv::docs_cheatsheet "$1" ;;
+    *)
+      if ! hv::docs_cheatsheet "$1"; then
+        valid="$(hv::docs_order | tr '\n' ' ')"
+        hv::die "unknown module: $1 (expected one of: ${valid% })"
+      fi
+      ;;
   esac
 }
 
