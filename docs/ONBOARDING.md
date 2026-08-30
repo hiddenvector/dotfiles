@@ -29,6 +29,17 @@ what to do inside each client repo that `hv setup` cannot do for you.
    third-party services with their own invitations, not something `hv
    setup` can provision. Once invited, `vercel login`, `railway login`, and
    `supabase login` from any client repo that uses them.
+5. **The `supabase` CLI needs a one-time Homebrew trust.** It installs from
+   Supabase's own tap (`supabase/tap`), not Homebrew core, and Homebrew
+   refuses to load a formula from a tap it hasn't been told to trust. When
+   `hv setup` hits this during the packages step, it explains that trusting
+   a tap lets it run arbitrary code at install time and asks before doing
+   anything — say yes and it trusts the tap and retries automatically; say
+   no (or run non-interactively) and it leaves the tap untrusted and tells
+   you the command to run yourself later:
+   ```bash
+   brew trust supabase/tap
+   ```
 
 ## Per-repo setup
 
