@@ -42,8 +42,11 @@ hv_step_run() {
   local overlay
   overlay="$(hv::config_get HV_OVERLAY)"
   if [ -n "$overlay" ] && [ -x "$overlay/macos.sh" ]; then
-    hv::run "$overlay/macos.sh"
-    [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "overlay macos.sh"
+    if hv::run "$overlay/macos.sh"; then
+      [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "overlay macos.sh"
+    else
+      hv::warn "your overlay's macos.sh failed — $overlay/macos.sh"
+    fi
   fi
 
   hv::warn "three-finger drag needs a logout to take effect"

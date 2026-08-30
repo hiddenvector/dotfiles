@@ -36,6 +36,18 @@ setup() {
   [[ "$output" == *"overlay-macos-ran"* ]]
 }
 
+@test "a failing overlay macos.sh warns and does not claim success" {
+  mkdir -p "$HOME/overlay"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$HOME/overlay/macos.sh"
+  chmod +x "$HOME/overlay/macos.sh"
+  hv::config_set HV_OVERLAY "$HOME/overlay"
+  source "$HV_ROOT/setup/steps/60-macos.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  case "$stderr$output" in *"macos.sh failed"*) : ;; *) return 1 ;; esac
+  case "$output" in *"✓ overlay macos.sh"*) return 1 ;; esac
+}
+
 @test "run warns that three-finger drag needs a logout" {
   source "$HV_ROOT/setup/steps/60-macos.sh"
   run hv_step_run
