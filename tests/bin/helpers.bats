@@ -81,6 +81,31 @@ GITALLOW
   [ "$status" -eq 0 ]
 }
 
+@test "gbd refuses to delete an unmerged branch and does not delete remote" {
+  git init -q --bare "$BATS_TEST_TMPDIR/remote.git"
+  git remote add origin "$BATS_TEST_TMPDIR/remote.git"
+
+  # Create an unmerged branch (commits not on main, not yet pushed)
+  git switch -q -c feature
+  git commit -q --allow-empty -m work
+  git switch -q main
+
+  # Try to delete without -D: should fail because unmerged
+  run "$HV_ROOT/bin/gbd" feature
+  [ "$status" -ne 0 ]
+
+  # Verify branch still exists locally
+  run git branch --list feature
+  case "$output" in
+    *feature*) : ;;
+    *) return 1 ;;
+  esac
+
+  # Verify no remote branch was created (gbd never pushed)
+  run git ls-remote --heads origin feature
+  [ "$output" = "" ]
+}
+
 @test "gprune runs without a remote and leaves main alone" {
   run "$HV_ROOT/bin/gprune"
   run git branch --list main
