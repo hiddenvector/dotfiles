@@ -56,3 +56,28 @@ setup() {
   [ "$output" = "atlas" ]
   [[ "$stderr" == *"Machine name"* ]]
 }
+
+@test "hv::confirm_always accepts the exact word yes" {
+  run --separate-stderr bash -c "source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; echo yes | hv::confirm_always 'Create a public repo'"
+  [ "$status" -eq 0 ]
+}
+
+@test "hv::confirm_always accepts y or yes case-insensitively" {
+  run --separate-stderr bash -c "source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; echo Y | hv::confirm_always 'Create a public repo'"
+  [ "$status" -eq 0 ]
+  run --separate-stderr bash -c "source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; echo YES | hv::confirm_always 'Create a public repo'"
+  [ "$status" -eq 0 ]
+}
+
+# This is the actual defect from the review: hv::confirm_always previously
+# matched the [Yy]* prefix, the same pattern hv::confirm still uses. That
+# gate sits directly in front of `gh repo create` and `gh ssh-key add` --
+# live GitHub mutations -- so a stray word starting with y/Y must not read
+# as consent the way it legitimately can for hv::confirm's lower-stakes
+# prompts.
+@test "hv::confirm_always rejects a y-prefixed word that is not y or yes" {
+  run --separate-stderr bash -c "source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; echo yesterday | hv::confirm_always 'Create a public repo'"
+  [ "$status" -eq 1 ]
+  run --separate-stderr bash -c "source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; echo Y2K | hv::confirm_always 'Create a public repo'"
+  [ "$status" -eq 1 ]
+}

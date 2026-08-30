@@ -36,6 +36,27 @@ setup() {
   grep -q "hand written" "$HOME"/.zshrc.bak.*
 }
 
+# A years-old ~/.gitconfig or ~/.zshrc getting silently renamed behind one
+# easy-to-miss warning line is exactly what an earlier ruling refused to let
+# happen to settings.json. This asserts the backup gets the loud treatment:
+# the exact backup path named, and explicit merge-by-hand guidance -- not
+# just proof that a backup exists on disk.
+@test "hv::link warns loudly and names the exact backup path" {
+  echo "hand written" > "$HOME/.gitconfig"
+  run hv::link "$SRC" "$HOME/.gitconfig"
+  [ "$status" -eq 0 ]
+  local backup
+  backup="$(ls "$HOME"/.gitconfig.bak.*)"
+  case "$output" in
+    *"$backup"*) : ;;
+    *) return 1 ;;
+  esac
+  case "$output" in
+    *"merge"*) : ;;
+    *) return 1 ;;
+  esac
+}
+
 @test "hv::link retargets a symlink pointing somewhere else" {
   ln -s "$BATS_TEST_TMPDIR/elsewhere" "$HOME/.zshrc"
   hv::link "$SRC" "$HOME/.zshrc"

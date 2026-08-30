@@ -27,10 +27,14 @@ hv::confirm() {
 }
 
 # For outward-facing actions (creating repos, uploading keys). --yes must not
-# be able to trigger these; with no input available, decline.
+# be able to trigger these; with no input available, decline. Unlike
+# hv::confirm's [Yy]* prefix match, this requires the exact word "y" or
+# "yes" (case-insensitive) -- a prefix match would read "yesterday" or
+# "Y2K" as consent in front of a live GitHub mutation.
 hv::confirm_always() {
-  local question="$1" answer=""
+  local question="$1" answer="" normalized
   printf '       %s [y/N]: ' "$question" >&2
   read -r answer || return 1
-  case "$answer" in [Yy]*) return 0 ;; *) return 1 ;; esac
+  normalized="$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')"
+  case "$normalized" in y|yes) return 0 ;; *) return 1 ;; esac
 }

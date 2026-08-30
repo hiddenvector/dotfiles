@@ -14,7 +14,7 @@ touches what has drifted, reporting everything else as already converged.
 ## Install
 
 ```bash
-curl -fsSL https://hiddenvector.studio/dotfiles | bash
+curl -fsSL https://raw.githubusercontent.com/hiddenvector/dotfiles/main/bootstrap | bash
 ```
 
 Piping a script into `bash` sight unseen means trusting it without reading
@@ -22,8 +22,12 @@ it first. If you'd rather read it first, download it, look it over, then
 run it yourself:
 
 ```bash
-curl -fsSL https://hiddenvector.studio/dotfiles -o /tmp/hv-bootstrap && less /tmp/hv-bootstrap && bash /tmp/hv-bootstrap
+curl -fsSL https://raw.githubusercontent.com/hiddenvector/dotfiles/main/bootstrap -o /tmp/hv-bootstrap && less /tmp/hv-bootstrap && bash /tmp/hv-bootstrap
 ```
+
+(A short vanity URL such as `https://hiddenvector.studio/dotfiles` may
+redirect here in the future, but nothing serves that route today — the
+`raw.githubusercontent.com` command above is the one guaranteed to work.)
 
 Either way, `bootstrap` does the minimum needed to hand off to the repo
 itself: install Command Line Tools if missing, clone (or `pull` if the

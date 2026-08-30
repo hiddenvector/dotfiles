@@ -78,6 +78,32 @@ setup() {
   ! grep -q "overlay" "$HV_GIT_CONFIG_HOME/local"
 }
 
+# Regression test: hv_step_check used to test only [ -f ... ] on the
+# generated git local file -- existence, not content. Scenario: decline the
+# overlay at step 40 (an empty local file is written), configure one later
+# via `hv overlay init`, then run `hv setup` again. Existence-only would
+# report this step converged forever and the overlay's git settings would
+# never actually reach ~/.config/git/local. Content must be compared, the
+# way hv::docs_current compares docs/USAGE.md against its fragments.
+@test "check fails when an overlay is configured after the git local file was already written" {
+  source "$HV_ROOT/setup/steps/40-symlinks.sh"
+  hv_step_run
+  run hv_step_check
+  [ "$status" -eq 0 ]
+
+  mkdir -p "$HOME/overlay/git"
+  hv::config_set HV_OVERLAY "$HOME/overlay"
+  hv::config_load
+
+  run hv_step_check
+  [ "$status" -eq 1 ]
+
+  hv_step_run
+  grep -q "$HOME/overlay/git/config" "$HV_GIT_CONFIG_HOME/local"
+  run hv_step_check
+  [ "$status" -eq 0 ]
+}
+
 @test "run is idempotent" {
   source "$HV_ROOT/setup/steps/40-symlinks.sh"
   hv_step_run

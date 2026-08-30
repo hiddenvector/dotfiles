@@ -143,6 +143,28 @@ STEP
   [[ "$output" != *"ran-alpha"* ]]
 }
 
+@test "hv setup --only reports the step failed instead of aborting silently" {
+  # Before this fix, hv::step_invoke was called here outside any condition
+  # context, so a failing hv_step_run tripped `set -e` and exited 1 with no
+  # message at all -- the exact same failure the full run already names.
+  cat > "$HV_STEPS_DIR/05-broken.sh" <<'STEP'
+HV_STEP_NAME="broken"
+HV_STEP_SCOPE="user"
+hv_step_check() { return 1; }
+hv_step_run() { return 3; }
+STEP
+  run "$HV_ROOT/bin/hv" setup --only broken
+  [ "$status" -ne 0 ]
+  case "$stderr$output" in
+    *"step failed"*) : ;;
+    *) return 1 ;;
+  esac
+  case "$stderr$output" in
+    *05-broken*) : ;;
+    *) return 1 ;;
+  esac
+}
+
 @test "a step file that fails to parse is not reported as unknown" {
   # Looked up by the name this file *would* declare if it parsed -- no
   # other step provides that name, so a lookup that merely treats a parse
@@ -270,11 +292,24 @@ STEP
   # this bug ship unnoticed in the first place.
   unset HV_STEPS_DIR
   export HV_BREW_PREFIX="$BATS_TEST_TMPDIR/no-brew"
+  # These two are read-only inspection commands that real steps call
+  # directly (never through hv::run) because they must reflect real machine
+  # state even during a preview -- xcode-select -p (00-preflight) and
+  # defaults read (60-macos). Stub them so the assertion below can tell a
+  # legitimate read apart from a real mutation; every write in these steps
+  # already goes through hv::run and is dry-run-safe regardless.
+  hv_stub xcode-select 0 ""
+  hv_stub defaults 0 "0"
   run "$HV_ROOT/bin/hv" setup --dry-run
   [ "$status" -eq 0 ]
   case "$stderr$output" in
     *"]: "*) return 1 ;;
   esac
+  # Belt-and-suspenders: a step that mutated for real under --dry-run would
+  # hit one of the sandbox's deny-by-default stubs and be swallowed by the
+  # assertions above, which only look for prompt markers. This is the
+  # reviewer's highest-value single test change on the branch.
+  hv_assert_no_refusals
 }
 
 @test "hv setup --dry-run does not block waiting on stdin" {
@@ -287,6 +322,11 @@ STEP
   # for two minutes against a real, non-EOF stdin).
   unset HV_STEPS_DIR
   export HV_BREW_PREFIX="$BATS_TEST_TMPDIR/no-brew"
+  # See the comment on the previous test re: xcode-select/defaults being
+  # real, read-only inspection calls that legitimately run even under
+  # --dry-run.
+  hv_stub xcode-select 0 ""
+  hv_stub defaults 0 "0"
   local out="$BATS_TEST_TMPDIR/dry-run.out"
   local rc="$BATS_TEST_TMPDIR/dry-run.rc"
   ( "$HV_ROOT/bin/hv" setup --dry-run < /dev/zero > "$out" 2>&1; echo $? > "$rc" ) &
@@ -305,4 +345,69 @@ STEP
   fi
   wait "$pid" 2>/dev/null || true
   [ "$(cat "$rc")" = "0" ]
+  # As above: prove nothing hit a deny stub, not just that it exited 0 and
+  # printed no prompt marker.
+  hv_assert_no_refusals
+}
+
+@test "module selection from step 10 reaches a later step in the same hv setup run" {
+  # Regression test for: hv::config_load runs exactly once, at bin/hv
+  # startup, so it populates HV_MODULES in the *parent* process. The real
+  # 10-machine.sh writes the user's module choices to the config FILE from
+  # inside its own step subshell (via hv::config_set) -- that never touches
+  # this process's already-exported HV_MODULES. Every later step's subshell
+  # inherits the parent's environment, so without hv::cmd_setup reloading
+  # config between steps, a later step in this SAME `hv setup` invocation
+  # would still see the stale startup value ("core") no matter what the
+  # user actually picked at step 10 -- exactly the bug where a fresh
+  # `hv setup` installs only core, silently.
+  #
+  # No .bats setup() in this suite can catch this class of bug: every one
+  # of them calls hv::config_load (or config_set then config_load) itself,
+  # which papers over a missing reload in the real binary. Only driving the
+  # real bin/hv end-to-end -- with HV_CONFIG_HOME pointing at a directory
+  # that starts with no config file at all -- reproduces it.
+  export HV_STEPS_DIR="$BATS_TEST_TMPDIR/module-steps"
+  mkdir -p "$HV_STEPS_DIR"
+  # The real step, unmodified -- this is what actually writes HV_MODULES.
+  cp "$HV_ROOT/setup/steps/10-machine.sh" "$HV_STEPS_DIR/10-machine.sh"
+
+  # A private downstream step standing in for 50-packages.sh / 70-toolchains.sh:
+  # it only needs to prove what a later step's subshell sees. hv::modules and
+  # HV_ALL_MODULES are inherited from the parent shell's function/variable
+  # table into this subshell for free -- no re-sourcing needed, same as for
+  # any other step file.
+  local marker="$BATS_TEST_TMPDIR/modules-seen"
+  export HV_MARKER_FILE="$marker"
+  cat > "$HV_STEPS_DIR/50-modcheck.sh" <<'STEP'
+HV_STEP_NAME="modcheck"
+HV_STEP_SCOPE="user"
+hv_step_check() { return 1; }
+hv_step_run() { hv::modules | tr '\n' ' ' > "$HV_MARKER_FILE"; }
+STEP
+
+  # HV_CONFIG_HOME starts empty -- hv_setup_sandbox never wrote anything to
+  # it -- exactly a fresh machine's first run. With no existing config,
+  # step 10's per-module confirm defaults every module to "enable", and
+  # HV_YES=1 accepts every default without reading stdin: "she answers yes
+  # to every module," from the bug report, with no stdin choreography
+  # needed to reach it.
+  hv_stub sudo 0 ""
+  hv_stub scutil 0 "atlas"
+  hv_stub profiles 0 "MDM enrollment: No"
+  export HV_YES=1
+
+  run "$HV_ROOT/bin/hv" setup
+  [ "$status" -eq 0 ]
+  hv_assert_no_refusals
+
+  [ -f "$marker" ]
+  case "$(cat "$marker")" in
+    *swift*) : ;;
+    *) return 1 ;;
+  esac
+  case "$(cat "$marker")" in
+    *web*) : ;;
+    *) return 1 ;;
+  esac
 }

@@ -17,10 +17,16 @@ hv::link() {
   hv::run mkdir -p "$(dirname "$dst")"
 
   # A real file we did not create: preserve it rather than stranding the run.
+  # This can be a decade of hand-tuned aliases (~/.gitconfig, ~/.zshrc, ...)
+  # -- a single hv::warn line is easy to miss in a run's worth of output, so
+  # this is loud on purpose: name the file, name the exact backup path, and
+  # say outright that merging anything worth keeping is on the user.
   if [ -e "$dst" ] && [ ! -L "$dst" ]; then
     local backup
     backup="$dst.bak.$(date +%s)"
-    hv::warn "backing up existing $dst -> $backup"
+    hv::warn "$dst already exists -- replacing it with a symlink"
+    hv::warn "your original is backed up at: $backup"
+    hv::log "Compare the two and merge anything you want to keep by hand."
     hv::run mv "$dst" "$backup"
   fi
 

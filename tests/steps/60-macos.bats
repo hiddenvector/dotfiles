@@ -197,6 +197,20 @@ setup() {
   [[ ! "$output" =~ "trackpad, keyboard, dock, finder" ]]
 }
 
+# Reviewer proved by mutation that replacing both `hv::run killall` calls
+# with a bare `killall` left every test in this file passing -- none of them
+# isolated "killall routes through hv::run" from "killall only fires when
+# something was written". Force the write path (so a regression that skips
+# hv::run would actually invoke killall) and assert the stub log never sees
+# it under HV_DRY_RUN=1.
+@test "run does not invoke killall under dry run even when defaults would be written" {
+  make_defaults_stub_write_all
+  HV_DRY_RUN=1
+  source "$HV_ROOT/setup/steps/60-macos.sh"
+  run hv_step_run
+  hv_assert_not_called "killall"
+}
+
 @test "step scope is user" {
   source "$HV_ROOT/setup/steps/60-macos.sh"
   [ "$HV_STEP_SCOPE" = "user" ]

@@ -137,22 +137,46 @@ hv::cmd_setup() {
     # anything else nonzero means no step by this name exists.
     [ "$rc" -eq 2 ] && return 1
     [ "$rc" -eq 0 ] || hv::die "unknown step: $only"
-    hv::step_invoke "$file" run
-    return $?
+    # Guarded the same way the full-run loop below is guarded: without the
+    # `if !`, a failing hv_step_run would abort this script silently (bare
+    # exit 1, no message) instead of naming the step that failed.
+    if ! hv::step_invoke "$file" run; then
+      hv::err "step failed: $(basename "$file")"
+      return 1
+    fi
+    return 0
   fi
-  # Contract: any unguarded failing command inside hv_step_run stops the
-  # whole run, not just that step. Steps that cannot do their job (Touch ID
-  # blocked by MDM, a non-admin account, ...) must warn and return 0 --
-  # reserve a nonzero return from hv_step_run for genuinely unrecoverable
-  # conditions. When one does return nonzero here, we stop rather than
-  # silently skip it: continuing past a real failure would let `hv setup`
-  # report success on a machine that is only half-converged.
+  # Contract, as actually implemented: every call to hv::step_invoke here
+  # (and above, for --only) sits inside `if ! hv::step_invoke ...` -- a
+  # condition context. Bash disables errexit for the whole command being
+  # tested that way, and that includes the subshell hv::step_invoke forks,
+  # so an unguarded failing command deep inside hv_step_check/hv_step_run
+  # does NOT stop the run on the spot the way it would in an ordinary
+  # `set -e` script -- execution just falls through to whatever runs next
+  # inside that step's own functions. What actually determines the outcome
+  # is the *exit status the subshell ends on* (ordinarily hv_step_run's own
+  # final `return`), which is what this `if !` inspects. So: end
+  # hv_step_run with an explicit, meaningful `return` -- do not rely on an
+  # early failing command elsewhere in the function to signal failure,
+  # because on its own it will not. Steps that cannot do their job (Touch ID
+  # blocked by MDM, a non-admin account, ...) must warn and `return 0` --
+  # reserve a nonzero return for genuinely unrecoverable conditions. When
+  # hv::step_invoke does return nonzero, we stop rather than silently skip
+  # it: continuing past a real failure would let `hv setup` report success
+  # on a machine that is only half-converged.
   for file in $(hv::steps); do
     if ! hv::step_invoke "$file" converge; then
       hv::err "step failed: $(basename "$file")"
       hv::log "Remaining steps were not run. Fix the cause and re-run: hv setup"
       return 1
     fi
+    # Steps write per-user config (module selection, overlay path, ...) to
+    # the file via hv::config_set from inside their own subshell -- that
+    # never touches this process's already-exported HV_MODULES/HV_OVERLAY/
+    # HV_RESTRICTED. Reload after every step so a later step's subshell
+    # (which inherits this process's environment) sees what an earlier step
+    # in this SAME run just wrote, instead of the value present at startup.
+    hv::config_load
   done
 }
 
