@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Delete local branches whose upstream is gone. Safe for non-interactive use.
+set -euo pipefail
+
+git fetch --prune --prune-tags 2>/dev/null || true
+
+current="$(git branch --show-current 2>/dev/null || true)"
+
+git branch -vv | sed 's/^\* /  /' | awk '/: gone]/{print $1}' | while read -r b; do
+  [ -z "$b" ] && continue
+  [ "$b" = "$current" ] && continue
+  case "$b" in
+    main|master|develop) continue ;;
+  esac
+  git branch -D "$b"
+done

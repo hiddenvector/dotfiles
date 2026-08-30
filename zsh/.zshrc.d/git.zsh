@@ -42,55 +42,8 @@ glogf() {
           --preview 'git show --color=always {1}'
 }
 
-gprune() {
-  git fetch --prune --prune-tags
-
-  local current
-  current="$(git branch --show-current 2>/dev/null)" || return 0
-
-  git branch -vv \
-    | awk '/: gone]/{print $1}' \
-    | while read -r b; do
-      [[ -z "$b" ]] && continue
-      [[ "$b" == "$current" ]] && continue
-      case "$b" in
-        main|master|develop) continue ;;
-      esac
-      git branch -D "$b"
-    done
-}
-
-gbd() {
-  local force_flag=""
-  if [[ "$1" == "-D" ]]; then
-    force_flag="-D"
-    shift
-  fi
-
-  local branch="$1"
-  if [[ -z "$branch" ]]; then
-    echo "usage: gbd [-D] <branch-name>" >&2
-    return 2
-  fi
-
-  # Never let this nuke mainline branches
-  case "$branch" in
-    main|master|develop)
-      echo "refusing to delete protected branch: $branch" >&2
-      return 3
-      ;;
-  esac
-
-  # Delete local branch first
-  if [[ -n "$force_flag" ]]; then
-    git branch -D "$branch" || return $?
-  else
-    git branch -d "$branch" || return $?
-  fi
-
-  # Then delete remote branch (ignore if already gone)
-  git push origin --delete "$branch" 2>/dev/null || true
-}
+# gprune and gbd live in bin/ now — real executables, callable by anything
+# without needing this file sourced. Completions for them stay here.
 
 # Completion for gbd (adds -D + branch-name completion)
 _gbd() {

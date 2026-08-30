@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Delete a branch locally and on the remote. Safe for non-interactive use.
+set -euo pipefail
+
+force=""
+if [ "${1:-}" = "-D" ]; then
+  force="-D"
+  shift
+fi
+
+branch="${1:-}"
+if [ -z "$branch" ]; then
+  echo "usage: gbd [-D] <branch-name>" >&2
+  exit 2
+fi
+
+case "$branch" in
+  main|master|develop)
+    echo "refusing to delete protected branch: $branch" >&2
+    exit 3
+    ;;
+esac
+
+if [ -n "$force" ]; then
+  git branch -D "$branch"
+else
+  git branch -d "$branch"
+fi
+
+git push origin --delete "$branch" 2>/dev/null || true
