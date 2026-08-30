@@ -8,10 +8,16 @@ hv_step_check() {
   if hv::module_enabled web; then
     command -v fnm >/dev/null 2>&1 || return 1
     fnm current >/dev/null 2>&1 || return 1
+    # The lts-latest alias only exists once fnm default lts-latest has run
+    fnm list 2>/dev/null | grep -q 'lts-latest' || return 1
   fi
   if hv::module_enabled python; then
     command -v pyenv >/dev/null 2>&1 || return 1
-    pyenv versions >/dev/null 2>&1 || return 1
+    # Verify pyenv global is set to 3.13.x
+    case "$(pyenv version-name 2>/dev/null)" in
+      3.13*) ;;
+      *) return 1 ;;
+    esac
   fi
   return 0
 }
