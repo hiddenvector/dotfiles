@@ -65,19 +65,35 @@ EOF
 }
 
 # Move untracked personal config into the overlay, where it gets versioned.
+# Step scripts have no `set -e`, so an unchecked append followed by an
+# unconditional `rm -f` would delete the user's only copy of their config if
+# the append failed (overlay dir not writable, disk full, ...). The delete
+# is gated on the append actually succeeding.
 hv::_migrate_local() {
   local dir="$1" src
   [ "${HV_DRY_RUN:-0}" = "1" ] && return 0
+
   src="${HV_CONFIG_HOME:-$HOME/.config/hv}/local.Brewfile"
   if [ -s "$src" ]; then
-    cat "$src" >> "$dir/brew/personal.Brewfile"
-    hv::run rm -f "$src"
-    hv::ok "moved local.Brewfile into the overlay"
+    if cat "$src" >> "$dir/brew/personal.Brewfile"; then
+      hv::run rm -f "$src"
+      hv::ok "moved local.Brewfile into the overlay"
+    else
+      hv::warn "could not write $dir/brew/personal.Brewfile — leaving $src where it is"
+    fi
   fi
+
+  # local.zsh is only ever appended here, never deleted -- nothing else in
+  # this codebase owns or later removes it the way the Brewfile is owned by
+  # this migration -- so there is no delete to gate on success. Still warn
+  # if the append itself fails, for the same reason as above.
   src="$HOME/.zshrc.d/local.zsh"
   if [ -s "$src" ] && ! grep -q '^# Machine-specific' "$src"; then
-    cat "$src" >> "$dir/zshrc.d/personal.zsh"
-    hv::ok "moved local.zsh into the overlay"
+    if cat "$src" >> "$dir/zshrc.d/personal.zsh"; then
+      hv::ok "moved local.zsh into the overlay"
+    else
+      hv::warn "could not write $dir/zshrc.d/personal.zsh — leaving $src where it is"
+    fi
   fi
 }
 
@@ -130,17 +146,57 @@ hv_step_run() {
   default_repo="$(hv::ask "Repo name" "$default_repo")"
   visibility="$(hv::ask "Visibility" "private")"
 
-  hv::run gh repo create "$default_repo" "--$visibility" \
-    --description "Personal Hidden Vector dotfiles overlay"
-  hv::run git clone "https://github.com/$default_repo" "$dir"
-  hv::_scaffold_overlay "$dir"
-  hv::_migrate_local "$dir"
-  hv::run git -C "$dir" add -A
-  hv::run git -C "$dir" commit -m "Scaffold personal overlay"
-  hv::run git -C "$dir" push -u origin HEAD
+  # Every one of these can fail for real reasons (name taken, no network,
+  # disk full, ...) and none of it is guarded by `set -e`. Each step's exit
+  # status is checked explicitly, following the convention already
+  # established in setup/steps/30-identity.sh: check, warn, print the manual
+  # command, stop -- never scaffold, migrate, or claim `created` for a repo
+  # that is not actually in the state that implies.
+  #
+  # Note: hv::run always returns 0 while HV_DRY_RUN=1 (it prints "would run"
+  # instead of executing), so none of the "if ! hv::run ...; then" branches
+  # below can be taken during a dry run -- they only fire on a real failure.
+  if ! hv::run gh repo create "$default_repo" "--$visibility" \
+       --description "Personal Hidden Vector dotfiles overlay"; then
+    hv::warn "could not create $default_repo — nothing was scaffolded or recorded"
+    hv::log "  gh repo create $default_repo --$visibility --description \"Personal Hidden Vector dotfiles overlay\""
+    return 0
+  fi
 
+  if ! hv::run git clone "https://github.com/$default_repo" "$dir"; then
+    hv::warn "created github.com/$default_repo, but the local clone failed"
+    hv::log "  git clone https://github.com/$default_repo $dir"
+    hv::log "Re-run 'hv overlay init' — it will offer to adopt the repo that already exists."
+    return 0
+  fi
+
+  # The repo and the local clone both genuinely exist now, regardless of
+  # whether scaffolding below succeeds -- record it so a re-run's case 1
+  # (or case 2, if this run is retried from scratch) sees the true state.
   hv::config_set HV_OVERLAY "$dir"
   hv::config_set HV_OVERLAY_URL "https://github.com/$default_repo"
+
+  hv::_scaffold_overlay "$dir"
+  hv::_migrate_local "$dir"
+
+  if ! hv::run git -C "$dir" add -A; then
+    hv::warn "created and cloned github.com/$default_repo, but staging the scaffold failed"
+    hv::log "  git -C $dir add -A"
+    return 0
+  fi
+
+  if ! hv::run git -C "$dir" commit -m "Scaffold personal overlay"; then
+    hv::warn "created and cloned github.com/$default_repo, but committing the scaffold failed"
+    hv::log "  git -C $dir commit -m \"Scaffold personal overlay\""
+    return 0
+  fi
+
+  if ! hv::run git -C "$dir" push -u origin HEAD; then
+    hv::warn "created github.com/$default_repo and scaffolded it locally, but the push failed"
+    hv::log "  git -C $dir push -u origin HEAD"
+    return 0
+  fi
+
   [ "${HV_DRY_RUN:-0}" = "1" ] && return 0
   hv::ok "created github.com/$default_repo"
   return 0

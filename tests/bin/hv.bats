@@ -179,3 +179,15 @@ STEP
   [ "$status" -ne 0 ]
   [[ "$stderr$output" == *"unknown overlay subcommand"* ]]
 }
+
+@test "hv overlay --only rejects the combination instead of silently dropping it" {
+  run "$HV_ROOT/bin/hv" overlay --only beta
+  # Deliberately `[ ]`, not `[[ ]]`, for the substring checks: bash 3.2's
+  # `set -e` does not reliably abort on a failing `[[ ]]` unless it is the
+  # function's last statement, so a non-final `[[ ]]` here would silently
+  # stop enforcing anything and this test would pass even without the fix
+  # (confirmed by reverting the fix locally and re-running this test).
+  [ "$status" -ne 0 ]
+  [ "$output" != "${output/--only/}" ]
+  [ "$output" = "${output/ran-beta/}" ]
+}

@@ -75,6 +75,71 @@ setup() {
   hv_assert_called "--private"
 }
 
+@test "a failed repo create does not claim success or migrate" {
+  mkdir -p "$HV_CONFIG_HOME"
+  echo 'cask "chatgpt"' > "$HV_CONFIG_HOME/local.Brewfile"
+  # gh must fail both `repo view` (so case 2 is skipped and case 3 is
+  # reached) and `repo create` (the failure under test), while `api` keeps
+  # succeeding so a handle is still resolved.
+  cat > "$HV_STUB_DIR/gh" <<STUB
+#!/usr/bin/env bash
+echo "gh \$*" >> "$HV_STUB_LOG"
+case "\$1" in
+  api) echo someuser; exit 0 ;;
+  repo) exit 1 ;;
+esac
+exit 0
+STUB
+  chmod +x "$HV_STUB_DIR/gh"
+  source "$HV_ROOT/setup/steps/35-overlay.sh"
+  run hv_step_run < <(printf 'y\n')
+  # bash 3.2's `set -e` does not reliably abort on a failing `[[ ]]` unless
+  # it is the function's last statement (a long-standing bash 3.2 quirk --
+  # `[ ]` does not have this problem), so the substring check goes last.
+  [ -f "$HV_CONFIG_HOME/local.Brewfile" ]
+  hv_assert_not_called "clone"
+  [ "$(hv::config_get HV_OVERLAY)" != "$HOME/Developer/github.com/someuser/dotfiles" ]
+  [[ "$stderr$output" != *"✓ created github.com"* ]]
+}
+
+@test "a failed clone after a successful create does not scaffold or claim success" {
+  mkdir -p "$HV_CONFIG_HOME"
+  echo 'cask "chatgpt"' > "$HV_CONFIG_HOME/local.Brewfile"
+  # `repo view` fails (reach case 3), `repo create` succeeds, then `git
+  # clone` fails -- the repo now genuinely exists on GitHub but the local
+  # side never got set up.
+  cat > "$HV_STUB_DIR/gh" <<STUB
+#!/usr/bin/env bash
+echo "gh \$*" >> "$HV_STUB_LOG"
+case "\$1" in
+  api) echo someuser; exit 0 ;;
+  repo)
+    case "\$2" in
+      view) exit 1 ;;
+      create) exit 0 ;;
+    esac ;;
+esac
+exit 0
+STUB
+  chmod +x "$HV_STUB_DIR/gh"
+  cat > "$HV_STUB_DIR/git" <<STUB
+#!/usr/bin/env bash
+echo "git \$*" >> "$HV_STUB_LOG"
+[ "\$1" = "clone" ] && exit 1
+exit 0
+STUB
+  chmod +x "$HV_STUB_DIR/git"
+  source "$HV_ROOT/setup/steps/35-overlay.sh"
+  run hv_step_run < <(printf 'y\n')
+  # See the comment in the previous test re: bash 3.2 and non-final `[[ ]]`.
+  [ -f "$HV_CONFIG_HOME/local.Brewfile" ]
+  [ ! -f "$HOME/Developer/github.com/someuser/dotfiles/README.md" ]
+  # The repo genuinely was created -- the warning is allowed (expected, even)
+  # to say so plainly ("created ..., but the local clone failed"). What must
+  # never appear is the hv::ok success line itself.
+  [[ "$stderr$output" != *"✓ created github.com"* ]]
+}
+
 @test "run scaffolds the overlay contract directories" {
   export HV_OVERLAY_DIR="$HOME/overlay"
   source "$HV_ROOT/setup/steps/35-overlay.sh"
@@ -93,6 +158,21 @@ setup() {
   hv::_migrate_local "$HOME/overlay"
   grep -q "chatgpt" "$HOME/overlay/brew/personal.Brewfile"
   [ ! -f "$HV_CONFIG_HOME/local.Brewfile" ]
+}
+
+@test "a failed append leaves local.Brewfile in place" {
+  mkdir -p "$HV_CONFIG_HOME"
+  echo 'cask "chatgpt"' > "$HV_CONFIG_HOME/local.Brewfile"
+  source "$HV_ROOT/setup/steps/35-overlay.sh"
+  hv::_scaffold_overlay "$HOME/overlay"
+  # A read-only *file* blocks the append (a read-only directory would not --
+  # appending to an existing file needs write permission on the file itself,
+  # not on the directory that contains it).
+  chmod 444 "$HOME/overlay/brew/personal.Brewfile"
+  run hv::_migrate_local "$HOME/overlay"
+  chmod 644 "$HOME/overlay/brew/personal.Brewfile"
+  [ -f "$HV_CONFIG_HOME/local.Brewfile" ]
+  [[ "$stderr$output" == *"leaving"* ]]
 }
 
 @test "the scaffolded README explains the contract" {

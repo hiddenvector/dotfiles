@@ -189,7 +189,11 @@ main() {
     update)    hv::run git -C "$HV_ROOT" pull --ff-only && hv::cmd_setup "" ;;
     identity)  hv::cmd_setup identity ;;
     machine)   hv::cmd_setup machine ;;
-    overlay)   hv::cmd_setup overlay ;;
+    overlay)
+      # overlay already targets a single, fixed step -- --only makes no
+      # sense combined with it. Reject rather than silently ignoring it.
+      [ -n "$only" ] && hv::die "--only is not valid with 'overlay' (it already targets the overlay step)"
+      hv::cmd_setup overlay ;;
     cheatsheet) hv::cmd_setup cheatsheet ;;
     ""|help|-h|--help) hv::usage; return 1 ;;
     *) hv::err "unknown command: $cmd"; hv::usage; return 1 ;;
