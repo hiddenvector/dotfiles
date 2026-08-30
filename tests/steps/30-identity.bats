@@ -118,6 +118,59 @@ setup() {
   [[ "$output" == *"gh ssh-key add"* ]] || [[ "$stderr" == *"gh ssh-key add"* ]]
 }
 
+@test "run offers to adopt an existing unsuffixed signing key" {
+  mkdir -p "$HOME/.ssh"
+  touch "$HOME/.ssh/id_ed25519_signing" "$HOME/.ssh/id_ed25519_signing.pub"
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  run hv_step_run < /dev/null
+  [ "$status" -eq 0 ]
+  hv_assert_not_called "ssh-keygen"
+  grep -qF "id_ed25519_signing.pub" "$HV_GIT_CONFIG_HOME/identity"
+  ! grep -qF "id_ed25519_signing_prometheus.pub" "$HV_GIT_CONFIG_HOME/identity"
+  # not machine-suffixed
+  [ ! -f "$HOME/.ssh/id_ed25519_signing_prometheus" ]
+}
+
+@test "run includes an adopted unsuffixed key in allowed-signers" {
+  mkdir -p "$HOME/.ssh"
+  touch "$HOME/.ssh/id_ed25519_signing"
+  echo "ssh-ed25519 AAAAADOPTED adopted@example.com" > "$HOME/.ssh/id_ed25519_signing.pub"
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  run hv_step_run < /dev/null
+  [ "$status" -eq 0 ]
+  grep -q "AAAAADOPTED" "$HV_GIT_CONFIG_HOME/allowed-signers"
+}
+
+@test "check passes for an adopted unsuffixed signing key" {
+  mkdir -p "$HOME/.ssh"
+  touch "$HOME/.ssh/id_ed25519_signing" "$HOME/.ssh/id_ed25519_signing.pub"
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  hv_step_run < /dev/null
+  run hv_step_check
+  [ "$status" -eq 0 ]
+}
+
+@test "run generates a machine-specific key when declining to adopt an existing unsuffixed one" {
+  export HV_YES=0
+  mkdir -p "$HOME/.ssh"
+  touch "$HOME/.ssh/id_ed25519_signing" "$HOME/.ssh/id_ed25519_signing.pub"
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  # name, email, decline-adopt, decline-upload
+  run hv_step_run <<< $'\n\nn\nn'
+  [ "$status" -eq 0 ]
+  hv_assert_called "ssh-keygen"
+  grep -qF "id_ed25519_signing_prometheus.pub" "$HV_GIT_CONFIG_HOME/identity"
+}
+
+@test "run does not offer to adopt when no unsuffixed key exists" {
+  source "$HV_ROOT/setup/steps/30-identity.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  case "$output" in
+    *"existing signing key"*) return 1 ;;
+  esac
+}
+
 @test "dry run generates no key and claims nothing" {
   export HV_DRY_RUN=1
   source "$HV_ROOT/setup/steps/30-identity.sh"

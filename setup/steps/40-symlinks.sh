@@ -47,6 +47,53 @@ hv::_write_git_local() {
   } > "$HV_GIT_CONFIG_HOME/local"
 }
 
+hv::_write_local_zsh_stub() {
+  cat > "$HOME/.zshrc.d/local.zsh" <<'EOF'
+# Machine-specific config, not tracked anywhere.
+# Anything you want on every Mac belongs in your overlay instead.
+[[ -f ~/.secrets ]] && source ~/.secrets
+EOF
+}
+
+# local.zsh is never a tracked file -- hv::link never touches it -- so any
+# symlink found here was left by a previous, non-hv dotfiles setup. Leaving
+# it alone would let it go dangling the moment that other repo is cleaned up
+# (~/.zshrc sources ~/.zshrc.d/*.zsh unconditionally, so a dangling link
+# there breaks every new shell). Reconcile it before the "create if missing"
+# check below ever sees it.
+hv::_reconcile_local_zsh() {
+  local dst="$HOME/.zshrc.d/local.zsh" target
+
+  [ -L "$dst" ] || return 0
+  target="$(readlink "$dst")"
+
+  # A symlink we created ourselves would point inside this repo. We never
+  # create one for local.zsh, but skip out if that ever changes.
+  case "$target" in
+    "$HV_ROOT"/*) return 0 ;;
+  esac
+
+  if [ -e "$dst" ]; then
+    if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+      hv::log "would copy ~/.zshrc.d/local.zsh (currently -> $target) into a real file"
+      return 0
+    fi
+    local content
+    content="$(cat "$dst")"
+    hv::run rm -f "$dst"
+    printf '%s\n' "$content" > "$dst"
+    hv::warn "local.zsh was a symlink into $target -- copied its contents into a real file at ~/.zshrc.d/local.zsh so they don't dangle when that repo goes away"
+  else
+    if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+      hv::log "would replace dangling ~/.zshrc.d/local.zsh (-> $target) with the standard stub"
+      return 0
+    fi
+    hv::run rm -f "$dst"
+    hv::_write_local_zsh_stub
+    hv::warn "local.zsh was a dangling symlink (-> $target) -- replaced ~/.zshrc.d/local.zsh with the standard stub"
+  fi
+}
+
 hv_step_run() {
   hv::step 40 "symlinks"
 
@@ -80,12 +127,10 @@ EOF
     hv::ok "created ~/.secrets"
   fi
 
+  hv::_reconcile_local_zsh
+
   if [ ! -f "$HOME/.zshrc.d/local.zsh" ] && [ "${HV_DRY_RUN:-0}" != "1" ]; then
-    cat > "$HOME/.zshrc.d/local.zsh" <<'EOF'
-# Machine-specific config, not tracked anywhere.
-# Anything you want on every Mac belongs in your overlay instead.
-[[ -f ~/.secrets ]] && source ~/.secrets
-EOF
+    hv::_write_local_zsh_stub
     hv::ok "created ~/.zshrc.d/local.zsh"
   fi
 

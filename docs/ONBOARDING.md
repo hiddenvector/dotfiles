@@ -83,6 +83,42 @@ Static HTML — an `index.html` and an `assets/` directory, no build step, no
 `package.json`. Clone it and open `index.html`, or serve the directory with
 any static file server.
 
+## Migrating from an existing dotfiles setup
+
+If you're moving onto `hv setup` from a personal dotfiles repo you already
+had wired up, most of the transition is automatic:
+
+- **Existing symlinks get retargeted, not skipped.** If `~/.zshrc`,
+  `~/.gitconfig`, or a `~/.zshrc.d/*.zsh` fragment is already a symlink
+  (even one pointing at your old repo), `hv setup` simply repoints it at
+  this repo's copy. You don't need to remove anything first.
+- **`~/.claude/settings.json`, `~/.secrets`, and an existing `~/.claude/CLAUDE.md`
+  are left alone.** `hv setup` never overwrites personal files it can't
+  safely merge: an existing `settings.json` is untouched (our suggested
+  version is dropped alongside it, at `settings.hv.json`, for you to merge
+  by hand); `~/.secrets` is only created if it doesn't already exist; and an
+  existing `CLAUDE.md` keeps its content, gaining only a single import line
+  for the house rules if it doesn't already have one.
+
+Two things that are *not* plain symlinks need their own handling, and `hv
+setup` now covers both:
+
+- **`~/.zshrc.d/local.zsh`.** This file is deliberately never a tracked
+  symlink — it's meant to hold real, machine-specific config. If it's
+  already a symlink into another dotfiles repo, `hv setup` copies its
+  current contents into a real file at the same path (so nothing is lost)
+  and warns you it did so. If that symlink was already dangling (the other
+  repo, or the file, is already gone), it's replaced with the standard
+  stub instead, and you're told the same way. Either way, `--dry-run` only
+  reports what it would do — the file isn't touched.
+- **An existing SSH signing key.** If `~/.ssh/id_ed25519_signing` (without
+  a machine suffix) already exists — typically because it's what your old
+  gitconfig referenced — `hv setup` notices before generating a new one and
+  asks whether to adopt it for this machine instead. Say yes and your
+  identity file points at the key you already have, and it's included when
+  `allowed-signers` is rebuilt; say no (or run non-interactively) and it
+  generates the usual per-machine key as before.
+
 ## When something here doesn't match the repo
 
 These steps were verified against each repo's actual files

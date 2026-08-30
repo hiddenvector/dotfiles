@@ -138,6 +138,86 @@ FRAG
   printf '%s\n' "$output" | grep -q "OVERLAY_FRAGMENT_LOADED"
 }
 
+@test "run materializes a stale local.zsh symlink from another dotfiles repo" {
+  mkdir -p "$HOME/other-dotfiles/zsh" "$HOME/.zshrc.d"
+  printf 'export FOO=bar\n' > "$HOME/other-dotfiles/zsh/local.zsh"
+  ln -sfn "$HOME/other-dotfiles/zsh/local.zsh" "$HOME/.zshrc.d/local.zsh"
+
+  source "$HV_ROOT/setup/steps/40-symlinks.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+
+  [ ! -L "$HOME/.zshrc.d/local.zsh" ]
+  [ -f "$HOME/.zshrc.d/local.zsh" ]
+  grep -q "FOO=bar" "$HOME/.zshrc.d/local.zsh"
+  case "$output" in
+    *"was a symlink into"*) : ;;
+    *) return 1 ;;
+  esac
+}
+
+@test "run replaces a dangling local.zsh symlink with the standard stub" {
+  mkdir -p "$HOME/.zshrc.d"
+  ln -sfn "$HOME/gone-repo/zsh/local.zsh" "$HOME/.zshrc.d/local.zsh"
+
+  source "$HV_ROOT/setup/steps/40-symlinks.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+
+  [ ! -L "$HOME/.zshrc.d/local.zsh" ]
+  [ -f "$HOME/.zshrc.d/local.zsh" ]
+  grep -q "source ~/.secrets" "$HOME/.zshrc.d/local.zsh"
+  case "$output" in
+    *"was a dangling symlink"*) : ;;
+    *) return 1 ;;
+  esac
+}
+
+@test "dry run leaves a stale local.zsh symlink untouched and claims nothing" {
+  mkdir -p "$HOME/other-dotfiles/zsh" "$HOME/.zshrc.d"
+  printf 'export FOO=bar\n' > "$HOME/other-dotfiles/zsh/local.zsh"
+  ln -sfn "$HOME/other-dotfiles/zsh/local.zsh" "$HOME/.zshrc.d/local.zsh"
+
+  source "$HV_ROOT/setup/steps/40-symlinks.sh"
+  export HV_DRY_RUN=1
+  run hv_step_run
+  [ "$status" -eq 0 ]
+
+  [ -L "$HOME/.zshrc.d/local.zsh" ]
+  [ "$(readlink "$HOME/.zshrc.d/local.zsh")" = "$HOME/other-dotfiles/zsh/local.zsh" ]
+  case "$output" in
+    *"would copy"*) : ;;
+    *) return 1 ;;
+  esac
+}
+
+@test "dry run leaves a dangling local.zsh symlink untouched and claims nothing" {
+  mkdir -p "$HOME/.zshrc.d"
+  ln -sfn "$HOME/gone-repo/zsh/local.zsh" "$HOME/.zshrc.d/local.zsh"
+
+  source "$HV_ROOT/setup/steps/40-symlinks.sh"
+  export HV_DRY_RUN=1
+  run hv_step_run
+  [ "$status" -eq 0 ]
+
+  [ -L "$HOME/.zshrc.d/local.zsh" ]
+  [ ! -e "$HOME/.zshrc.d/local.zsh" ]
+  case "$output" in
+    *"would replace dangling"*) : ;;
+    *) return 1 ;;
+  esac
+}
+
+@test "run does not touch local.zsh once it is a real file" {
+  source "$HV_ROOT/setup/steps/40-symlinks.sh"
+  hv_step_run
+  printf 'export ALREADY=here\n' >> "$HOME/.zshrc.d/local.zsh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  [ ! -L "$HOME/.zshrc.d/local.zsh" ]
+  grep -q "ALREADY=here" "$HOME/.zshrc.d/local.zsh"
+}
+
 @test ".zshrc does not error when no overlay is configured" {
   source "$HV_ROOT/setup/steps/40-symlinks.sh"
   hv_step_run

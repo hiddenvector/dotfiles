@@ -11,8 +11,17 @@ hv::_signing_key() {
   printf '%s\n' "$HOME/.ssh/id_ed25519_signing_$(hv::machine_name)"
 }
 
+# An unsuffixed key predates the per-machine naming scheme -- typically
+# carried over from an older, non-hv dotfiles setup that this machine's
+# gitconfig already points at.
+hv::_unsuffixed_signing_key() {
+  printf '%s\n' "$HOME/.ssh/id_ed25519_signing"
+}
+
 hv_step_check() {
-  [ -f "$HV_GIT_CONFIG_HOME/identity" ] && [ -f "$(hv::_signing_key)" ]
+  [ -f "$HV_GIT_CONFIG_HOME/identity" ] || return 1
+  [ -f "$(hv::_signing_key)" ] && return 0
+  [ -f "$(hv::_unsuffixed_signing_key)" ]
 }
 
 hv::_gh_authed() { gh auth status >/dev/null 2>&1; }
@@ -53,7 +62,10 @@ hv::_rebuild_allowed_signers() {
   hv::run mkdir -p "$HV_GIT_CONFIG_HOME"
   # Regenerated wholesale every run, so it cannot accumulate duplicates.
   cat "$HV_ROOT/git/allowed-signers.hv" > "$out"
-  for pub in "$HOME"/.ssh/id_ed25519_signing_*.pub; do
+  # Two non-overlapping globs: the machine-suffixed keys this step normally
+  # creates, plus an adopted unsuffixed key (see hv::_unsuffixed_signing_key)
+  # that would otherwise never verify locally.
+  for pub in "$HOME"/.ssh/id_ed25519_signing.pub "$HOME"/.ssh/id_ed25519_signing_*.pub; do
     [ -f "$pub" ] || continue
     printf '%s namespaces="git" %s\n' "$email" "$(cut -d' ' -f1,2 "$pub")" >> "$out"
   done
@@ -88,24 +100,33 @@ hv_step_run() {
 
   key="$(hv::_signing_key)"
   if [ ! -f "$key" ]; then
-    hv::log "No signing key for this machine. Generating one."
-    hv::log "(One key per machine — private keys never move between Macs.)"
-    hv::run mkdir -p "$HOME/.ssh"
-    hv::run ssh-keygen -t ed25519 -N "" -C "$(hv::machine_name) signing" -f "$key"
+    local existing_key
+    existing_key="$(hv::_unsuffixed_signing_key)"
 
-    if hv::confirm_always "Upload this signing key to your GitHub account?"; then
-      if hv::run gh ssh-key add "$key.pub" --type signing \
-           --title "$(hv::machine_name) (signing)"; then
-        [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "uploaded to GitHub"
+    if [ -f "$existing_key" ] \
+       && hv::confirm "Found an existing signing key ($existing_key) — use it for this machine instead of generating a new one?" y; then
+      key="$existing_key"
+      hv::ok "adopting existing signing key $key"
+    else
+      hv::log "No signing key for this machine. Generating one."
+      hv::log "(One key per machine — private keys never move between Macs.)"
+      hv::run mkdir -p "$HOME/.ssh"
+      hv::run ssh-keygen -t ed25519 -N "" -C "$(hv::machine_name) signing" -f "$key"
+
+      if hv::confirm_always "Upload this signing key to your GitHub account?"; then
+        if hv::run gh ssh-key add "$key.pub" --type signing \
+             --title "$(hv::machine_name) (signing)"; then
+          [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "uploaded to GitHub"
+        else
+          hv::warn "upload failed — add it manually:"
+          hv::log "  gh ssh-key add $key.pub --type signing --title \"$(hv::machine_name) (signing)\""
+        fi
       else
-        hv::warn "upload failed — add it manually:"
+        hv::warn "not uploaded — commits will not verify until you add it:"
         hv::log "  gh ssh-key add $key.pub --type signing --title \"$(hv::machine_name) (signing)\""
       fi
-    else
-      hv::warn "not uploaded — commits will not verify until you add it:"
-      hv::log "  gh ssh-key add $key.pub --type signing --title \"$(hv::machine_name) (signing)\""
+      [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "$key"
     fi
-    [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "$key"
   else
     [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "signing key present"
   fi
