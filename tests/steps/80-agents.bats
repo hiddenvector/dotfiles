@@ -96,3 +96,29 @@ setup() {
     *) false ;;
   esac
 }
+
+@test "an existing settings.json is never replaced" {
+  mkdir -p "$HOME/.claude"
+  printf '{"model":"opus","statusLine":{"type":"command"}}' > "$HOME/.claude/settings.json"
+  source "$HV_ROOT/setup/steps/80-agents.sh"
+  hv_step_run
+  # The user's own file survives byte-for-byte: not moved, not merged,
+  # not backed up-and-replaced.
+  [ "$(cat "$HOME/.claude/settings.json")" = '{"model":"opus","statusLine":{"type":"command"}}' ]
+  [ ! -L "$HOME/.claude/settings.json" ]
+  [ -L "$HOME/.claude/settings.hv.json" ]
+}
+
+@test "settings.json is installed when none exists" {
+  source "$HV_ROOT/setup/steps/80-agents.sh"
+  hv_step_run
+  [ -L "$HOME/.claude/settings.json" ]
+}
+
+@test "check reports drift when the toolbelt link is missing" {
+  source "$HV_ROOT/setup/steps/80-agents.sh"
+  hv_step_run
+  rm -f "$HOME/.claude/skills/hv-toolbelt"
+  run hv_step_check
+  [ "$status" -eq 1 ]
+}
