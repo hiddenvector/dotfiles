@@ -79,3 +79,29 @@ B
   source "$HV_ROOT/setup/steps/50-packages.sh"
   [ "$HV_STEP_SCOPE" = "user" ]
 }
+
+@test "a failed module bundle warns instead of claiming success" {
+  hv_stub_at_path "$HV_BREW_PREFIX/bin/brew" brew 1 ""
+  source "$HV_ROOT/setup/steps/50-packages.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  case "$stderr$output" in *"failed"*) : ;; *) return 1 ;; esac
+  case "$output" in *"✓ web"*) return 1 ;; esac
+}
+
+@test "dry run installs nothing and claims nothing" {
+  HV_DRY_RUN=1
+  source "$HV_ROOT/setup/steps/50-packages.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  hv_assert_not_called "bundle --file"
+  hv_assert_not_called "install-extension"
+  case "$output" in *"✓"*) return 1 ;; esac
+}
+
+@test "a failed bundle still returns 0 so later steps run" {
+  hv_stub_at_path "$HV_BREW_PREFIX/bin/brew" brew 1 ""
+  source "$HV_ROOT/setup/steps/50-packages.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+}

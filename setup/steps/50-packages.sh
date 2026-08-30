@@ -35,26 +35,38 @@ hv::_vscode_extensions() {
   while read -r ext; do
     [ -n "$ext" ] && hv::run code --install-extension "$ext" --force
   done < "$HV_ROOT/config/vscode-extensions.txt"
-  hv::ok "VS Code extensions"
+  [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "VS Code extensions"
 }
 
 hv_step_run() {
   hv::step 50 "packages"
 
-  local m overlay f
+  local m overlay f overlay_failed
   for m in $(hv::modules); do
-    hv::_bundle "$HV_ROOT/brew/$m.Brewfile"
-    hv::ok "$m"
+    if hv::_bundle "$HV_ROOT/brew/$m.Brewfile"; then
+      [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "$m"
+    else
+      hv::warn "$m packages failed — re-run 'hv setup --only packages' after fixing"
+    fi
   done
 
   overlay="$(hv::config_get HV_OVERLAY)"
   if [ -n "$overlay" ] && [ "$overlay" != "none" ] && [ -d "$overlay/brew" ]; then
+    overlay_failed=0
     for f in "$overlay"/brew/*.Brewfile; do
-      [ -f "$f" ] && hv::_bundle "$f"
+      if [ -f "$f" ]; then
+        hv::_bundle "$f" || overlay_failed=1
+      fi
     done
-    hv::ok "overlay packages"
+    if [ "$overlay_failed" -eq 0 ]; then
+      [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "overlay packages"
+    else
+      hv::warn "overlay packages failed — re-run 'hv setup --only packages' after fixing"
+    fi
   fi
 
-  hv::module_enabled apps && hv::_vscode_extensions
+  if hv::module_enabled apps; then
+    hv::_vscode_extensions
+  fi
   return 0
 }
