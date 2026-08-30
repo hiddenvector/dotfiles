@@ -151,10 +151,15 @@ hv::cmd_setup() {
 }
 
 hv::cmd_check() {
-  local file drifted=0
+  local file drifted=0 name
   for file in $(hv::steps); do
-    hv::step_invoke "$file" check || drifted=1
+    if ! hv::step_invoke "$file" check; then
+      name="$(basename "$file")"
+      hv::warn "drifted: ${name%.sh}"
+      drifted=1
+    fi
   done
+  [ "$drifted" = "0" ] && hv::ok "all checks passed"
   return "$drifted"
 }
 
