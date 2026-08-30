@@ -115,6 +115,15 @@ hv_step_run() {
     return 0
   fi
 
+  # Dry-run mode: everything past this point either prompts (whether to
+  # adopt or create an overlay, its repo name, its visibility) or shells
+  # out to `gh` for real to compute what to offer -- a preview must do
+  # neither, so state the intent and stop here.
+  if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+    hv::log "would prompt to adopt or create a personal overlay repo"
+    return 0
+  fi
+
   hv::log "An overlay is your personal layer on top of the Hidden Vector base —"
   hv::log "your own packages, aliases and git settings, tracked in your own repo"
   hv::log "so they follow you to every Mac you use."

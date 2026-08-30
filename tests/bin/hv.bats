@@ -255,3 +255,54 @@ STEP
   esac
   [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
 }
+
+@test "hv setup --dry-run prompts for nothing" {
+  # As above, this runs against the *real* setup/steps -- that is where the
+  # bug lived: several steps (identity, overlay, homebrew's shared-write
+  # offer) reached hv::ask/hv::confirm/hv::confirm_always before checking
+  # HV_DRY_RUN, so a preview would stop and interrogate the user for real
+  # instead of just describing what it would ask. Every prompt function in
+  # setup/lib/prompt.sh prints "<question> [<default>]: " (or "[y/N]: ")
+  # to stderr *before* it ever tries to read a line -- so checking for that
+  # "]: " marker in the output is EOF-agnostic: it catches the bug even
+  # though this sandbox's own stdin is already closed, which is exactly
+  # the condition (a `curl | bash` install, or a test harness) that let
+  # this bug ship unnoticed in the first place.
+  unset HV_STEPS_DIR
+  export HV_BREW_PREFIX="$BATS_TEST_TMPDIR/no-brew"
+  run "$HV_ROOT/bin/hv" setup --dry-run
+  [ "$status" -eq 0 ]
+  case "$stderr$output" in
+    *"]: "*) return 1 ;;
+  esac
+}
+
+@test "hv setup --dry-run does not block waiting on stdin" {
+  # Belt-and-suspenders for the test above: actually connect stdin to a
+  # source that never delivers EOF (/dev/zero -- infinite NUL bytes, no
+  # newline, ever) and prove the process still finishes. If any step
+  # reaches a real `read` (via hv::ask/hv::confirm/hv::confirm_always) this
+  # hangs forever instead of completing -- which is the literal bug
+  # reported against the previous version of this dry-run path (it blocked
+  # for two minutes against a real, non-EOF stdin).
+  unset HV_STEPS_DIR
+  export HV_BREW_PREFIX="$BATS_TEST_TMPDIR/no-brew"
+  local out="$BATS_TEST_TMPDIR/dry-run.out"
+  local rc="$BATS_TEST_TMPDIR/dry-run.rc"
+  ( "$HV_ROOT/bin/hv" setup --dry-run < /dev/zero > "$out" 2>&1; echo $? > "$rc" ) &
+  local pid=$!
+  local waited=0
+  while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 10 ]; do
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -9 "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    echo "still running after ${waited}s -- something is blocked reading stdin:" >&2
+    cat "$out" >&2
+    return 1
+  fi
+  wait "$pid" 2>/dev/null || true
+  [ "$(cat "$rc")" = "0" ]
+}

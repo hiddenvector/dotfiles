@@ -24,6 +24,14 @@ hv_step_check() {
 }
 
 hv::_offer_shared_write() {
+  # Dry-run mode: state what we would ask and decline, same as a real "no"
+  # -- the confirm below blocks on stdin for real and must never run under
+  # a preview.
+  if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+    hv::log "would prompt to share write access with the admin group ($HV_BREW_PREFIX)"
+    return 1
+  fi
+
   hv::warn "$HV_BREW_PREFIX was installed by another account and is not writable by you."
   hv::log "Without write access you can run every Homebrew binary but cannot"
   hv::log "install new ones."

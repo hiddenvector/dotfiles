@@ -23,4 +23,32 @@ else
   git clone "$REPO" "$DEST"
 fi
 
+hv::_has_yes_flag() {
+  local a
+  for a in "$@"; do
+    [ "$a" = "--yes" ] && return 0
+  done
+  return 1
+}
+
+# When run as `curl … | bash`, stdin is the script itself and is at EOF by
+# the time `hv setup` inherits it -- every prompt (machine name, module
+# selection, identity, overlay) would then silently take its default with
+# no indication that happened. Point stdin back at the terminal so the
+# documented one-line install is actually interactive. `(exec < /dev/tty)`
+# probes openability in a subshell first so a failure (no controlling
+# terminal -- CI, a container, `bash -s` with stdin already redirected)
+# never leaks its error message, and never mutates this shell's stdin,
+# before we know it would succeed.
+if [ ! -t 0 ]; then
+  if (exec < /dev/tty) 2>/dev/null; then
+    exec < /dev/tty
+  elif ! hv::_has_yes_flag "$@"; then
+    echo "No terminal to prompt on, and --yes was not given." >&2
+    echo "Re-run with --yes to accept every default non-interactively," >&2
+    echo "or run this from a terminal so it can ask you directly." >&2
+    exit 1
+  fi
+fi
+
 exec "$DEST/bin/hv" setup "$@"

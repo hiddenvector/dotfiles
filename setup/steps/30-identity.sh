@@ -63,6 +63,18 @@ hv::_rebuild_allowed_signers() {
 hv_step_run() {
   hv::step 30 "identity"
 
+  # Dry-run mode: state what we would do and exit early. Every question
+  # below (name, email, whether to upload a new signing key, whether to use
+  # a different email for Hidden Vector repos) is a real prompt that blocks
+  # on stdin -- a preview must never reach one.
+  if [ "${HV_DRY_RUN:-0}" = "1" ]; then
+    hv::log "would prompt for name and email"
+    hv::log "would generate a signing key for this machine if it has none"
+    hv::log "would prompt to upload the signing key to GitHub"
+    hv::log "would write $HV_GIT_CONFIG_HOME/identity"
+    return 0
+  fi
+
   hv::_gh_authed || hv::run gh auth login
 
   local name email hv_email key
