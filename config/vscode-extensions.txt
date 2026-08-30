@@ -1,0 +1,7 @@
+eamodio.gitlens
+editorconfig.editorconfig
+llvm-vs-code-extensions.lldb-dap
+swiftlang.swift-vscode
+tamasfe.even-better-toml
+usernamehw.errorlens
+vscodevim.vim
