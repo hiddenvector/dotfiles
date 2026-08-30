@@ -58,8 +58,8 @@ setup() {
   chmod -w "$HV_BREW_PREFIX"
   source "$HV_ROOT/setup/steps/20-homebrew.sh"
   run hv_step_run
-  [[ "$stderr$output" == *"another account"* ]]
   chmod +w "$HV_BREW_PREFIX"
+  [[ "$stderr$output" == *"another account"* ]]
 }
 
 @test "run states the tradeoff before sharing write access" {
@@ -67,8 +67,8 @@ setup() {
   chmod -w "$HV_BREW_PREFIX"
   source "$HV_ROOT/setup/steps/20-homebrew.sh"
   run hv_step_run
-  [[ "$stderr$output" == *"any admin user"* ]]
   chmod +w "$HV_BREW_PREFIX"
+  [[ "$stderr$output" == *"any admin user"* ]]
 }
 
 @test "run does not chgrp when the prefix is already writable" {
@@ -89,7 +89,13 @@ setup() {
   source "$HV_ROOT/setup/steps/20-homebrew.sh"
   run hv_step_run
   [ "$status" -eq 0 ]
-  [[ "$stderr$output" == *"installation failed"* ]]
+  # `[ ]`/`case`, not `[[ ]]`, for the non-final check: bash 3.2's `set -e`
+  # does not reliably abort on a failing `[[ ]]` unless it is the function's
+  # last statement.
+  case "$stderr$output" in
+    *"installation failed"*) : ;;
+    *) return 1 ;;
+  esac
   [[ "$stderr$output" != *"✓ core packages"* ]]
 }
 

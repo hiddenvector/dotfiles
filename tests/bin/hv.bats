@@ -24,22 +24,37 @@ STEP
 @test "hv setup runs every drifted step in filename order" {
   run "$HV_ROOT/bin/hv" setup
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ran-alpha"* ]]
-  [[ "$output" == *"ran-beta"* ]]
+  # `[ ]`/`case`, not `[[ ]]`, for every non-final check: bash 3.2's `set -e`
+  # does not reliably abort on a failing `[[ ]]` unless it is the function's
+  # last statement.
+  case "$output" in
+    *ran-alpha*) : ;;
+    *) return 1 ;;
+  esac
+  case "$output" in
+    *ran-beta*) : ;;
+    *) return 1 ;;
+  esac
   [[ "${output%%ran-beta*}" == *"ran-alpha"* ]]
 }
 
 @test "hv setup skips steps that are already converged" {
   touch "$HOME/alpha.done"
   run "$HV_ROOT/bin/hv" setup
-  [[ "$output" != *"ran-alpha"* ]]
+  # See the comment above re: bash 3.2 and non-final `[[ ]]`.
+  case "$output" in
+    *ran-alpha*) return 1 ;;
+  esac
   [[ "$output" == *"ran-beta"* ]]
 }
 
 @test "hv setup is idempotent" {
   "$HV_ROOT/bin/hv" setup
   run "$HV_ROOT/bin/hv" setup
-  [[ "$output" != *"ran-alpha"* ]]
+  # See the comment above re: bash 3.2 and non-final `[[ ]]`.
+  case "$output" in
+    *ran-alpha*) return 1 ;;
+  esac
   [[ "$output" != *"ran-beta"* ]]
 }
 
@@ -57,7 +72,12 @@ STEP
 
 @test "hv setup --only runs the named step and no others" {
   run "$HV_ROOT/bin/hv" setup --only beta
-  [[ "$output" == *"ran-beta"* ]]
+  # See the comment on "hv setup runs every drifted step..." re: bash 3.2
+  # and non-final `[[ ]]`.
+  case "$output" in
+    *ran-beta*) : ;;
+    *) return 1 ;;
+  esac
   [[ "$output" != *"ran-alpha"* ]]
 }
 
@@ -110,8 +130,16 @@ hv_step_run() { return 3; }
 STEP
   run "$HV_ROOT/bin/hv" setup
   [ "$status" -ne 0 ]
-  [[ "$stderr$output" == *"05-broken"* ]]
-  [[ "$stderr$output" == *"Remaining steps were not run"* ]]
+  # See the comment on "hv setup runs every drifted step..." re: bash 3.2
+  # and non-final `[[ ]]`.
+  case "$stderr$output" in
+    *05-broken*) : ;;
+    *) return 1 ;;
+  esac
+  case "$stderr$output" in
+    *"Remaining steps were not run"*) : ;;
+    *) return 1 ;;
+  esac
   [[ "$output" != *"ran-alpha"* ]]
 }
 
@@ -122,7 +150,12 @@ STEP
   echo 'this is ( not valid bash' > "$HV_STEPS_DIR/05-bad.sh"
   run "$HV_ROOT/bin/hv" setup --only bad
   [ "$status" -ne 0 ]
-  [[ "$stderr$output" == *"05-bad.sh"* ]]
+  # See the comment on "hv setup runs every drifted step..." re: bash 3.2
+  # and non-final `[[ ]]`.
+  case "$stderr$output" in
+    *05-bad.sh*) : ;;
+    *) return 1 ;;
+  esac
   [[ "$stderr$output" != *"unknown step: bad"* ]]
 }
 
@@ -138,7 +171,12 @@ STEP
   printf 'HV_OVERLAY="%s"
 ' "$HOME/overlay" > "$HV_CONFIG_HOME/config"
   run "$HV_ROOT/bin/hv" setup
-  [[ "$output" == *"ran-extra"* ]]
+  # See the comment on "hv setup runs every drifted step..." re: bash 3.2
+  # and non-final `[[ ]]`.
+  case "$output" in
+    *ran-extra*) : ;;
+    *) return 1 ;;
+  esac
   [[ "${output%%ran-extra*}" == *"ran-beta"* ]]
 }
 

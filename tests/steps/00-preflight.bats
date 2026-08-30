@@ -77,7 +77,13 @@ setup() {
   source "$HV_ROOT/setup/steps/00-preflight.sh"
   run hv_step_run
   [ "$status" -eq 0 ]
-  [[ "$stderr$output" == *"would install"* ]]
+  # `[ ]`/`case`, not `[[ ]]`, for the non-final check: bash 3.2's `set -e`
+  # does not reliably abort on a failing `[[ ]]` unless it is the function's
+  # last statement.
+  case "$stderr$output" in
+    *"would install"*) : ;;
+    *) return 1 ;;
+  esac
   hv_assert_not_called "xcode-select --install"
 }
 

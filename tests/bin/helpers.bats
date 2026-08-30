@@ -113,14 +113,29 @@ GITALLOW
   run "$HV_ROOT/bin/gprune"
   [ "$status" -eq 0 ]
 
+  # `[ ]`/`case`, not `[[ ]]`, for every non-final check below: bash 3.2's
+  # `set -e` does not reliably abort on a failing `[[ ]]` unless it is the
+  # function's last statement, so a non-final `[[ ]]` here would silently
+  # stop enforcing the guardrail and this test would still print `ok` even
+  # with the mainline/current-branch protection removed from gprune
+  # (confirmed by reverting that protection locally and re-running this test).
   run git branch --list develop
-  [[ "$output" == *"develop"* ]]
+  case "$output" in
+    *develop*) : ;;
+    *) return 1 ;;
+  esac
 
   run git branch --list feature-active
-  [[ "$output" == *"feature-active"* ]]
+  case "$output" in
+    *feature-active*) : ;;
+    *) return 1 ;;
+  esac
 
   run git branch --list main
-  [[ "$output" == *"main"* ]]
+  case "$output" in
+    *main*) : ;;
+    *) return 1 ;;
+  esac
 
   run git branch --list stale
   [ "$output" = "" ]

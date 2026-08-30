@@ -11,7 +11,13 @@ setup() {
 @test "hv::ok writes a check mark to stdout" {
   run hv::ok "linked"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"✓"* ]]
+  # `[ ]`/`case`, not `[[ ]]`, for the non-final check: bash 3.2's `set -e`
+  # does not reliably abort on a failing `[[ ]]` unless it is the function's
+  # last statement.
+  case "$output" in
+    *"✓"*) : ;;
+    *) return 1 ;;
+  esac
   [[ "$output" == *"linked"* ]]
 }
 

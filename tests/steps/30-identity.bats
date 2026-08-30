@@ -109,7 +109,13 @@ setup() {
   hv_stub gh 1 "auth_error" "id: 1" "login: testuser" "email: test@example.com"
   source "$HV_ROOT/setup/steps/30-identity.sh"
   run hv_step_run <<< "y"
-  [[ "$output" == *"upload failed"* ]] || [[ "$stderr" == *"upload failed"* ]]
+  # `[ ]`/`case`, not `[[ ]]`, for the non-final check: bash 3.2's `set -e`
+  # does not reliably abort on a failing `[[ ]]` unless it is the function's
+  # last statement.
+  case "$stderr$output" in
+    *"upload failed"*) : ;;
+    *) return 1 ;;
+  esac
   [[ "$output" == *"gh ssh-key add"* ]] || [[ "$stderr" == *"gh ssh-key add"* ]]
 }
 

@@ -39,7 +39,13 @@ setup() {
   source "$HV_ROOT/setup/steps/05-touchid.sh"
   run hv_step_run
   [ "$status" -eq 0 ]
-  [[ "$stderr$output" == *"no Touch ID sensor"* ]]
+  # `[ ]`/`case`, not `[[ ]]`, for the non-final check: bash 3.2's `set -e`
+  # does not reliably abort on a failing `[[ ]]` unless it is the function's
+  # last statement.
+  case "$stderr$output" in
+    *"no Touch ID sensor"*) : ;;
+    *) return 1 ;;
+  esac
   hv_assert_not_called "tee"
 }
 
@@ -75,6 +81,11 @@ setup() {
   run hv_step_run
   [ "$status" -eq 0 ]
   hv_assert_not_called "sudo"
-  [[ "$stderr$output" != *"written"* ]]
+  # `[ ]`/`case`, not `[[ ]]`, for the non-final check: bash 3.2's `set -e`
+  # does not reliably abort on a failing `[[ ]]` unless it is the function's
+  # last statement.
+  case "$stderr$output" in
+    *written*) return 1 ;;
+  esac
   [[ "$stderr$output" == *"would"* ]]
 }
