@@ -7,7 +7,6 @@ export HV_STEP_SCOPE="user"
 hv_step_check() {
   if hv::module_enabled web; then
     command -v fnm >/dev/null 2>&1 || return 1
-    fnm current >/dev/null 2>&1 || return 1
     # The lts-latest alias only exists once fnm default lts-latest has run
     fnm list 2>/dev/null | grep -q 'lts-latest' || return 1
   fi

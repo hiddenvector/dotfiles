@@ -183,14 +183,43 @@ PYENV
   [ "$status" -eq 1 ]
 }
 
-@test "check fails when fnm current fails" {
-  hv_stub fnm 1 ""
-  hv_stub pyenv 0 ""
-  hv::config_set HV_MODULES "core web"
+@test "check passes even when fnm current fails, as it does outside an interactive shell" {
+  # `fnm current` only works after `fnm env` has been sourced into the
+  # calling shell -- something that happens for an interactive zsh session
+  # but never for the non-interactive bash process hv runs as. A correctly
+  # configured machine hits exactly this: `current` fails while `list`
+  # (which needs no shell state) succeeds and already shows the lts-latest
+  # alias, proving `fnm default lts-latest` ran. The check must not depend
+  # on `current` succeeding.
+  cat > "$HV_STUB_DIR/fnm" <<'FNM'
+#!/usr/bin/env bash
+echo "fnm $*" >> "$HV_STUB_LOG"
+case "$1" in
+  current)
+    echo "error: \`fnm env\` was not applied in this context." >&2
+    exit 1
+    ;;
+  list) printf '* v24.16.0 default, lts-latest\n* system\n' ;;
+  *) exit 0 ;;
+esac
+FNM
+  chmod +x "$HV_STUB_DIR/fnm"
+
+  cat > "$HV_STUB_DIR/pyenv" <<'PYENV'
+#!/usr/bin/env bash
+echo "pyenv $*" >> "$HV_STUB_LOG"
+case "$1" in
+  version-name) printf '3.13.13\n' ;;
+  *) exit 0 ;;
+esac
+PYENV
+  chmod +x "$HV_STUB_DIR/pyenv"
+
+  hv::config_set HV_MODULES "core web python"
   hv::config_load
   source "$HV_ROOT/setup/steps/70-toolchains.sh"
   run hv_step_check
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 0 ]
 }
 
 @test "check fails when lts-latest alias is absent" {
