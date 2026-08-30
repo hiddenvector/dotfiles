@@ -60,3 +60,10 @@ setup() {
   hv::link "$SRC" "$HOME/.zshrc"
   [ ! -e "$HOME/.zshrc" ]
 }
+
+@test "hv::link prints no success line under dry run" {
+  HV_DRY_RUN=1
+  run hv::link "$SRC" "$HOME/.zshrc"
+  [ "$status" -eq 0 ]
+  ! printf '%s\n' "$output" | grep -q "linked $HOME/.zshrc"
+}

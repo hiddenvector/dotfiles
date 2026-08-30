@@ -25,5 +25,7 @@ hv::link() {
   fi
 
   hv::run ln -sfn "$src" "$dst"
-  hv::ok "linked $dst"
+  # hv::run is a no-op under HV_DRY_RUN=1 -- ln never actually ran, so
+  # claiming "linked" would be a false success line in a dry-run preview.
+  [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "linked $dst"
 }

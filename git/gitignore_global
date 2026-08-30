@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.xcworkspace/xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Vim / temp
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+
+# JetBrains
+.idea/
+
+# Claude
+**/.claude/settings.local.json
+

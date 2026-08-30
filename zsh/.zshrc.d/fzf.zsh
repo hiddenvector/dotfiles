@@ -1,0 +1,56 @@
+export FZF_DEFAULT_COMMAND='rg --files --hidden --no-messages --glob "!.git"'
+export FZF_ALT_C_COMMAND='find . -type d -not -path "*/.git/*" 2>/dev/null'
+
+# Option+C on Mac produces ç instead of Alt+C — remap to fzf cd widget
+bindkey 'ç' fzf-cd-widget
+
+ff() {
+  local file
+
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    file="$(
+      git ls-files -co --exclude-standard \
+      | fzf --preview 'bat --style=numbers --color=always {}'
+    )" || return
+  else
+    file="$(
+      rg --files --hidden --no-messages \
+        --glob '!.git' --glob '!.build' --glob '!DerivedData' \
+      | fzf --preview 'bat --style=numbers --color=always {}'
+    )"
+  fi
+
+  [[ -n "$file" ]] || return
+  command ${=EDITOR:-code} -- "$file"
+}
+
+ffa() {
+  local file
+  file="$(find . -type f -not -path '*/.git/*' | sed 's|^\./||' \
+    | fzf --preview 'bat --style=numbers --color=always {}'
+  )" || return
+  [[ -n "$file" ]] || return
+  command ${=EDITOR:-code} -- "$file"
+}
+
+fif() {
+  local query="$1"
+  [[ -n "$query" ]] || { echo "usage: fif <text>" >&2; return 2; }
+
+  rg --hidden --no-messages --glob '!.git/*' --glob '!.build/*' --glob '!DerivedData/*' -n "$query" \
+    | fzf --delimiter : --nth 3.. \
+          --preview 'bat --style=numbers --color=always --highlight-line {2} -- {1}' \
+          --bind 'enter:execute:code --wait --goto {1}:{2}'
+}
+
+j() {
+  local dir
+  dir="$(
+    find "$HOME/Developer" -maxdepth 5 -type d -name .git -prune -print 2>/dev/null \
+      | sed 's|/.git$||' \
+      | fzf --query "${*:-}"
+  )" || return
+
+  [[ -n "$dir" ]] || return
+  cd "$dir"
+}

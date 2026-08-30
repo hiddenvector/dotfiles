@@ -1,0 +1,58 @@
+[init]
+	defaultBranch = main
+[pull]
+	rebase = true
+[rebase]
+	autoStash = true
+[fetch]
+	prune = true
+[rerere]
+	enabled = true
+[help]
+	autocorrect = prompt
+[core]
+	editor = code --wait
+	pager = delta
+	excludesfile = ~/.gitignore_global
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	side-by-side = true
+[diff]
+	algorithm = histogram
+[merge]
+	conflictstyle = zdiff3
+[push]
+	autoSetupRemote = true
+[branch]
+	sort = -committerdate
+[credential]
+	helper =
+[credential "https://github.com"]
+	helper =
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[gpg]
+	format = ssh
+[commit]
+	gpgsign = true
+[tag]
+	gpgsign = true
+[gpg "ssh"]
+	allowedSignersFile = ~/.config/git/allowed-signers
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+
+# Identity lives outside this repo. Later includes win.
+[include]
+	path = ~/.config/git/identity
+[includeIf "gitdir:~/Developer/github.com/hiddenvector/"]
+	path = ~/.config/git/identity.hv
+[include]
+	path = ~/.config/git/local
