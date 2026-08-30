@@ -84,6 +84,19 @@ setup() {
   done
 }
 
+@test "core Brewfile installs git-lfs, which gitconfig requires unconditionally" {
+  grep -q 'brew "git-lfs"' "$HV_ROOT/brew/core.Brewfile"
+  grep -q "required = true" "$HV_ROOT/git/gitconfig"
+}
+
+@test "core Brewfile installs the claude-code cask that step 80 depends on" {
+  grep -q 'cask "claude-code"' "$HV_ROOT/brew/core.Brewfile"
+}
+
+@test "apps Brewfile installs the Claude desktop app" {
+  grep -q 'cask "claude"' "$HV_ROOT/brew/apps.Brewfile"
+}
+
 @test "run warns when bundle installation fails but returns 0" {
   hv_stub_at_path "$HV_BREW_PREFIX/bin/brew" "brew" 1
   source "$HV_ROOT/setup/steps/20-homebrew.sh"

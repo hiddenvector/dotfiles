@@ -7,7 +7,11 @@ export HV_STEP_SCOPE="user"
 
 hv::_untracked_personal_config() {
   local f="${HV_CONFIG_HOME:-$HOME/.config/hv}/local.Brewfile"
-  [ -s "$f" ]
+  # Step 40 creates this file itself now, as a commented stub -- plain
+  # non-empty (-s) would make that stub read as "personal packages" the
+  # moment setup finishes, on every machine, forever. Only a line that
+  # isn't blank or a comment counts as real content.
+  grep -qvE '^[[:space:]]*(#.*)?$' "$f" 2>/dev/null
 }
 
 hv_step_check() {

@@ -50,6 +50,15 @@ hv_step_run() {
     fi
   done
 
+  local local_brewfile="${HV_CONFIG_HOME:-$HOME/.config/hv}/local.Brewfile"
+  if [ -s "$local_brewfile" ]; then
+    if hv::_bundle "$local_brewfile"; then
+      [ "${HV_DRY_RUN:-0}" = "1" ] || hv::ok "local packages"
+    else
+      hv::warn "local packages failed — re-run 'hv setup --only packages' after fixing"
+    fi
+  fi
+
   overlay="$(hv::config_get HV_OVERLAY)"
   if [ -n "$overlay" ] && [ "$overlay" != "none" ] && [ -d "$overlay/brew" ]; then
     overlay_failed=0

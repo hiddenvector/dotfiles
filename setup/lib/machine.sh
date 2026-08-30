@@ -38,10 +38,52 @@ hv::has_touchid_sensor() {
   bioutil -r >/dev/null 2>&1
 }
 
+# Hardware-derived, not account- or config-derived: nothing here is synced
+# between a person's Macs, so this is the only per-machine fact available
+# to differentiate them without asking a network. Never cached to disk, for
+# the same reason as every other fact in this file.
+hv::_hardware_seed() {
+  ioreg -d2 -c IOPlatformExpertDevice 2>/dev/null \
+    | awk -F'"' '/IOPlatformUUID/ { print $4; exit }'
+}
+
+# The naive version of this picked the first name in the list that was not
+# the machine's *current* name -- fine for one Mac, but two freshly-imaged
+# Macs both start with a generic current name (e.g. "Marks-MacBook-Pro" vs
+# "Marks-Mac-Studio"), so both landed on the same first suggestion
+# ("prometheus"). Step 30 names the signing key after the machine name, so
+# two identically-suggested-and-accepted machines collide on key filename
+# and GitHub key title. Rotating the list by a hash of a hardware-unique,
+# never-synced identifier (the platform UUID) gives two different physical
+# Macs different starting points deterministically, with no network call
+# and no state to keep in sync -- it does not guarantee uniqueness (a
+# person is still free to type the same name for both, and should not),
+# but it removes the collision as the *default* offered to both.
 hv::suggest_machine_name() {
-  local current name
+  local current seed hash count start name
+
   current="$(hv::machine_name)"
-  for name in $HV_MACHINE_NAMES; do
+  # bash 3.2 has no arrays; use positional parameters instead. Splitting on
+  # whitespace is exactly what turns the space-separated name list into
+  # separate positional params -- not an accident to quote away.
+  # shellcheck disable=SC2086
+  set -- $HV_MACHINE_NAMES
+  count=$#
+
+  start=0
+  seed="$(hv::_hardware_seed)"
+  if [ -n "$seed" ] && [ "$count" -gt 0 ]; then
+    hash="$(printf '%s' "$seed" | cksum | awk '{print $1}')"
+    start=$((hash % count))
+  fi
+
+  while [ "$start" -gt 0 ]; do
+    set -- "$@" "$1"
+    shift
+    start=$((start - 1))
+  done
+
+  for name in "$@"; do
     if [ "$name" != "$current" ]; then
       printf '%s\n' "$name"
       return 0

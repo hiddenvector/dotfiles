@@ -97,6 +97,22 @@ hv_assert_no_refusals() {
   ! grep -q '^REFUSED:' "$HV_STUB_LOG"
 }
 
+# hv_stub's generated script embeds its "out" argument inside double quotes
+# at heredoc-creation time (the heredoc is unquoted, so $out is interpolated
+# literally) -- a value that itself contains double quotes, like a real
+# `ioreg` line, breaks that generated script's syntax. Write the stub
+# directly instead, with a quoted heredoc, so the embedded quotes survive.
+hv_stub_ioreg_uuid() {
+  local uuid="$1"
+  cat > "$HV_STUB_DIR/ioreg" <<STUB
+#!/usr/bin/env bash
+echo "ioreg \$*" >> "$HV_STUB_LOG"
+printf '%s\n' '    | "IOPlatformUUID" = "$uuid"'
+exit 0
+STUB
+  chmod +x "$HV_STUB_DIR/ioreg"
+}
+
 # Create a logging stub at a specific path (for prefix-relative binaries).
 hv_stub_at_path() {
   local path="$1" name="$2" code="${3:-0}" out="${4:-}"

@@ -57,6 +57,20 @@ setup() {
   [[ "$stderr$output" != *"will not survive"* ]]
 }
 
+# Regression test: step 40 now creates local.Brewfile itself, as a
+# commented stub. A plain [ -s ] would read that stub as "personal
+# packages" on every machine, forever, the moment setup finishes.
+@test "check does not warn about a comment-only local.Brewfile stub" {
+  mkdir -p "$HV_CONFIG_HOME"
+  cat > "$HV_CONFIG_HOME/local.Brewfile" <<'EOF'
+# Your own packages, not tracked anywhere.
+# cask "chatgpt"
+EOF
+  source "$HV_ROOT/setup/steps/90-check.sh"
+  run hv_step_run
+  [[ "$stderr$output" != *"will not survive"* ]]
+}
+
 @test "step scope is user" {
   source "$HV_ROOT/setup/steps/90-check.sh"
   [ "$HV_STEP_SCOPE" = "user" ]

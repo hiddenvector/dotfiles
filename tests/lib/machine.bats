@@ -77,6 +77,36 @@ MDM enrollment: No"
   [[ "$output" =~ ^[a-z]+$ ]]
 }
 
+# Two Macs with no prior state each pick the first name in the list that
+# is not their *current* name -- before this fix that was always the same
+# name, so a person setting up two Macs was offered "prometheus" on both.
+# Rotating by a hash of the (never-synced, never-cached) hardware platform
+# UUID gives two different physical Macs different starting points without
+# any shared state or network call.
+@test "hv::suggest_machine_name differs for two different hardware UUIDs" {
+  hv_stub scutil 0 "Marks-MacBook-Pro"
+
+  hv_stub_ioreg_uuid "AAAAAAAA-0000-0000-0000-000000000001"
+  run hv::suggest_machine_name
+  local first="$output"
+
+  hv_stub_ioreg_uuid "BBBBBBBB-0000-0000-0000-000000000002"
+  run hv::suggest_machine_name
+  local second="$output"
+
+  [ -n "$first" ]
+  [ -n "$second" ]
+  [ "$first" != "$second" ]
+}
+
+@test "hv::suggest_machine_name still returns a name when ioreg is unavailable" {
+  hv_stub scutil 0 "Marks-MacBook-Pro"
+  hv_stub ioreg 1 ""
+  run hv::suggest_machine_name
+  [ -n "$output" ]
+  [[ "$output" =~ ^[a-z]+$ ]]
+}
+
 @test "hv::machine_has_default_name detects a curly apostrophe name" {
   hv_stub scutil 0 "$(printf 'Mark\xe2\x80\x99s Laptop')"
   run hv::machine_has_default_name

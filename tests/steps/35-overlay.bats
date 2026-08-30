@@ -49,10 +49,69 @@ setup() {
   hv_assert_called "clone"
 }
 
-@test "run offers an existing GitHub repo as the default" {
+@test "run defaults to hv-overlay, not dotfiles, as the overlay repo name" {
   source "$HV_ROOT/setup/steps/35-overlay.sh"
   run hv_step_run
-  [[ "$output" == *"someuser/dotfiles"* ]]
+  [[ "$output" == *"someuser/hv-overlay"* ]]
+  [[ "$output" != *"someuser/dotfiles"* ]]
+}
+
+@test "run rejects an existing repo that does not pass the overlay contract check" {
+  # The general gh stub (from setup()) returns "someuser" for every
+  # invocation, including the tree listing the contract check fetches --
+  # which contains none of the overlay markers, so this repo must be
+  # rejected rather than offered for adoption.
+  source "$HV_ROOT/setup/steps/35-overlay.sh"
+  run hv_step_run
+  [[ "$output" == *"doesn't look like an hv overlay"* ]]
+  hv_assert_not_called "clone"
+  [ "$(hv::config_get HV_OVERLAY)" != "$HOME/Developer/github.com/someuser/hv-overlay" ]
+}
+
+@test "run adopts an existing repo that passes the overlay contract check" {
+  cat > "$HV_STUB_DIR/gh" <<STUB
+#!/usr/bin/env bash
+echo "gh \$*" >> "$HV_STUB_LOG"
+case "\$1 \$2" in
+  "api user") echo someuser; exit 0 ;;
+  "repo view") exit 0 ;;
+esac
+case "\$*" in
+  *"defaultBranchRef"*) echo main; exit 0 ;;
+  *"git/trees/"*) printf 'brew/personal.Brewfile\nzshrc.d/personal.zsh\n'; exit 0 ;;
+esac
+exit 0
+STUB
+  chmod +x "$HV_STUB_DIR/gh"
+  source "$HV_ROOT/setup/steps/35-overlay.sh"
+  run bash -c "printf 'y\n' | { export HV_YES=0; source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/config.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; source '$HV_ROOT/setup/steps/35-overlay.sh'; hv_step_run; }"
+  hv_assert_called "clone https://github.com/someuser/hv-overlay"
+  [[ "$output" == *"someuser/hv-overlay"* ]]
+}
+
+@test "run rejects an existing repo that looks like a full dotfiles repo, even under --yes" {
+  # A repo that matches an overlay marker (git/config is common to both
+  # shapes) but ALSO carries install.sh/bin/hv/a top-level Brewfile must
+  # still be rejected -- this is exactly this developer's real
+  # hyperspacemark/dotfiles repo shape.
+  cat > "$HV_STUB_DIR/gh" <<STUB
+#!/usr/bin/env bash
+echo "gh \$*" >> "$HV_STUB_LOG"
+case "\$1 \$2" in
+  "api user") echo someuser; exit 0 ;;
+  "repo view") exit 0 ;;
+esac
+case "\$*" in
+  *"defaultBranchRef"*) echo main; exit 0 ;;
+  *"git/trees/"*) printf 'install.sh\nbin/hv\nBrewfile\ngit/config\n'; exit 0 ;;
+esac
+exit 0
+STUB
+  chmod +x "$HV_STUB_DIR/gh"
+  source "$HV_ROOT/setup/steps/35-overlay.sh"
+  run hv_step_run
+  [[ "$output" == *"doesn't look like an hv overlay"* ]]
+  hv_assert_not_called "clone"
 }
 
 @test "run never creates a repo under --yes alone" {
@@ -98,7 +157,7 @@ STUB
   # `[ ]` does not have this problem), so the substring check goes last.
   [ -f "$HV_CONFIG_HOME/local.Brewfile" ]
   hv_assert_not_called "clone"
-  [ "$(hv::config_get HV_OVERLAY)" != "$HOME/Developer/github.com/someuser/dotfiles" ]
+  [ "$(hv::config_get HV_OVERLAY)" != "$HOME/Developer/github.com/someuser/hv-overlay" ]
   [[ "$stderr$output" != *"✓ created github.com"* ]]
 }
 
@@ -133,7 +192,7 @@ STUB
   run hv_step_run < <(printf 'y\n')
   # See the comment in the previous test re: bash 3.2 and non-final `[[ ]]`.
   [ -f "$HV_CONFIG_HOME/local.Brewfile" ]
-  [ ! -f "$HOME/Developer/github.com/someuser/dotfiles/README.md" ]
+  [ ! -f "$HOME/Developer/github.com/someuser/hv-overlay/README.md" ]
   # The repo genuinely was created -- the warning is allowed (expected, even)
   # to say so plainly ("created ..., but the local clone failed"). What must
   # never appear is the hv::ok success line itself.

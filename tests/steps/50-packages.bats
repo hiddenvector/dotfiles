@@ -25,6 +25,41 @@ B
   hv_assert_not_called "swift.Brewfile"
 }
 
+@test "run bundles a non-empty local.Brewfile" {
+  mkdir -p "$HV_CONFIG_HOME"
+  echo 'cask "chatgpt"' > "$HV_CONFIG_HOME/local.Brewfile"
+  source "$HV_ROOT/setup/steps/50-packages.sh"
+  run hv_step_run
+  hv_assert_called "local.Brewfile"
+}
+
+@test "run does not bundle an empty local.Brewfile" {
+  mkdir -p "$HV_CONFIG_HOME"
+  : > "$HV_CONFIG_HOME/local.Brewfile"
+  source "$HV_ROOT/setup/steps/50-packages.sh"
+  run hv_step_run
+  hv_assert_not_called "local.Brewfile"
+}
+
+@test "run bundles the comment-only local.Brewfile stub step 40 creates (harmless no-op)" {
+  mkdir -p "$HV_CONFIG_HOME"
+  echo '# cask "chatgpt"' > "$HV_CONFIG_HOME/local.Brewfile"
+  source "$HV_ROOT/setup/steps/50-packages.sh"
+  run hv_step_run
+  hv_assert_called "local.Brewfile"
+}
+
+@test "a failed local bundle warns instead of claiming success" {
+  mkdir -p "$HV_CONFIG_HOME"
+  echo 'cask "chatgpt"' > "$HV_CONFIG_HOME/local.Brewfile"
+  hv_stub_at_path "$HV_BREW_PREFIX/bin/brew" brew 1 ""
+  source "$HV_ROOT/setup/steps/50-packages.sh"
+  run hv_step_run
+  [ "$status" -eq 0 ]
+  case "$stderr$output" in *"local packages failed"*) : ;; *) return 1 ;; esac
+  case "$output" in *"✓ local"*) return 1 ;; esac
+}
+
 @test "run bundles the overlay Brewfiles when an overlay exists" {
   mkdir -p "$HOME/overlay/brew"
   echo 'brew "jq"' > "$HOME/overlay/brew/personal.Brewfile"

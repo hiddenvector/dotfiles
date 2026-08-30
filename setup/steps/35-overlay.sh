@@ -17,6 +17,72 @@ hv_step_check() {
   [ -d "$configured" ]
 }
 
+# Fetch a repo's full file list without cloning it. Two calls: the first
+# resolves the default branch (and, as a side effect, whether the repo
+# exists at all -- callers only reach this after their own `gh repo view`
+# already confirmed that); the second lists every path in it. Either can
+# fail for an ordinary reason (empty repo, no network, rate limit) --
+# callers treat "could not determine" the same as "does not look like an
+# overlay" rather than adopting on the absence of evidence.
+hv::_repo_paths() {
+  local repo="$1" branch
+  branch="$(gh repo view "$repo" --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null)"
+  [ -z "$branch" ] && branch="main"
+  gh api "repos/$repo/git/trees/$branch?recursive=1" --jq '.tree[].path' 2>/dev/null
+}
+
+# Case-insensitive-free glob match against a newline-separated path list.
+hv::_paths_match() {
+  local paths="$1" pattern="$2" p
+  while IFS= read -r p; do
+    # shellcheck disable=SC2254 # intentional glob match, not literal
+    case "$p" in $pattern) return 0 ;; esac
+  done <<EOF
+$paths
+EOF
+  return 1
+}
+
+# The contract from README.md's Overlays section and docs/superpowers'
+# design: at least one of these marks a repo as an hv overlay.
+hv::_looks_like_overlay() {
+  local paths="$1"
+  hv::_paths_match "$paths" 'brew/*.Brewfile' \
+    || hv::_paths_match "$paths" 'zshrc.d/*.zsh' \
+    || hv::_paths_match "$paths" 'git/config' \
+    || hv::_paths_match "$paths" 'macos.sh' \
+    || hv::_paths_match "$paths" 'steps/*.sh'
+}
+
+# A full dotfiles repo (this developer's own hyperspacemark/dotfiles is
+# exactly this shape) is not an overlay, even if it happens to also
+# contain one of the paths above -- reject on these markers before ever
+# checking for a match.
+hv::_looks_like_full_dotfiles_repo() {
+  local paths="$1"
+  hv::_paths_match "$paths" 'install.sh' \
+    || hv::_paths_match "$paths" 'bin/hv' \
+    || hv::_paths_match "$paths" 'Brewfile'
+}
+
+# Before adopting ANY repo as an overlay -- found by the default guess or
+# named explicitly -- verify it actually looks like one. `gh repo view`
+# succeeding only means a repo by that name exists; on nothing more than
+# that, this used to adopt `<handle>/dotfiles` (now `<handle>/hv-overlay`)
+# outright, which for this developer specifically means adopting a real,
+# 12-year-old dotfiles repo and later executing its macos.sh as though it
+# were an overlay -- arbitrary code execution reached through a
+# default-yes prompt. Reject silently-wrong data (a failed or empty fetch)
+# the same as an explicit non-match: never adopt on the absence of
+# evidence.
+hv::_repo_contract_ok() {
+  local repo="$1" paths
+  paths="$(hv::_repo_paths "$repo")"
+  [ -z "$paths" ] && return 1
+  hv::_looks_like_full_dotfiles_repo "$paths" && return 1
+  hv::_looks_like_overlay "$paths"
+}
+
 hv::_scaffold_overlay() {
   local dir="$1"
   hv::run mkdir -p "$dir/brew" "$dir/zshrc.d" "$dir/git"
@@ -55,7 +121,7 @@ Everything here follows you to every Mac you set up.
 Edit a file, commit, push. On your other Mac:
 
 ```bash
-git -C ~/Developer/github.com/<you>/dotfiles pull
+git -C ~/Developer/github.com/<you>/hv-overlay pull
 hv setup
 ```
 
@@ -129,13 +195,27 @@ hv_step_run() {
   hv::log "so they follow you to every Mac you use."
 
   handle="$(gh api user --jq .login 2>/dev/null || echo "")"
-  default_repo="$handle/dotfiles"
-  dir="${HV_OVERLAY_DIR:-$HOME/Developer/github.com/$handle/dotfiles}"
+  # "dotfiles" is one of the most common repo names in existence -- a
+  # default of "<handle>/dotfiles" guarantees a collision with an existing,
+  # unrelated dotfiles repo for nearly everyone who has one. "hv-overlay"
+  # is specific enough not to already exist by accident.
+  default_repo="$handle/hv-overlay"
+  dir="${HV_OVERLAY_DIR:-$HOME/Developer/github.com/$handle/hv-overlay}"
 
-  # Case 2: it already exists on GitHub — offer it as the default.
+  # Case 2: it already exists on GitHub — offer it as the default, but only
+  # once it has passed the contract check above. A repo that merely exists
+  # under this name is not evidence it is an overlay.
   if gh repo view "$default_repo" >/dev/null 2>&1; then
     hv::log "Found $default_repo."
-    if hv::confirm "Use it as your overlay?" y; then
+    if ! hv::_repo_contract_ok "$default_repo"; then
+      hv::warn "$default_repo doesn't look like an hv overlay — none of"
+      hv::warn "brew/*.Brewfile, zshrc.d/*.zsh, git/config, macos.sh, or"
+      hv::warn "steps/*.sh were found there (or it looks like a full"
+      hv::warn "dotfiles repo instead: install.sh, bin/hv, or a top-level"
+      hv::warn "Brewfile)."
+      hv::log "Not adopting it automatically — hv setup would go on to run"
+      hv::log "its macos.sh and steps/*.sh as though they were an overlay's."
+    elif hv::confirm "Use it as your overlay?" n; then
       hv::run git clone "https://github.com/$default_repo" "$dir"
       hv::config_set HV_OVERLAY "$dir"
       hv::config_set HV_OVERLAY_URL "https://github.com/$default_repo"

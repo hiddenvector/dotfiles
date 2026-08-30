@@ -48,13 +48,28 @@ hv_step_run() {
   current="$(hv::machine_name)"
 
   if hv::machine_has_default_name; then
-    suggestion="$(hv::suggest_machine_name)"
-    hv::log "This Mac is named \"${current:-unset}\"."
-    hv::log "Hidden Vector machines get proper names — it is the key for"
-    hv::log "per-machine config, and it shows up in your prompt."
-    hv::log "Suggestions: $HV_MACHINE_NAMES"
-    name="$(hv::ask "Machine name" "$suggestion")"
-    hv::_set_machine_name "$name"
+    # Renaming a Mac is the single most surprising thing --yes could do
+    # silently -- hv::ask would otherwise take its default and this step
+    # would sudo scutil an unattended machine's name with no confirmation
+    # at all. Every other default-acceptance under --yes is a config
+    # choice; this one reaches into macOS system state, so it gets its own
+    # gate instead of going through hv::ask.
+    if [ "${HV_YES:-0}" = "1" ]; then
+      hv::warn "this Mac still has a stock name (\"${current:-unset}\") — not renaming it under --yes"
+      hv::log "Set one deliberately, then re-run 'hv machine':"
+      hv::log "  sudo scutil --set ComputerName <name>"
+    else
+      suggestion="$(hv::suggest_machine_name)"
+      hv::log "This Mac is named \"${current:-unset}\"."
+      hv::log "Hidden Vector machines get proper names — it is the key for"
+      hv::log "per-machine config, and it shows up in your prompt."
+      hv::log "Suggestions: $HV_MACHINE_NAMES"
+      hv::log "Pick one none of your other Macs already use: it becomes part of"
+      hv::log "this machine's signing-key filename and GitHub key title (step"
+      hv::log "30), and two machines sharing a name collide there."
+      name="$(hv::ask "Machine name" "$suggestion")"
+      hv::_set_machine_name "$name"
+    fi
   else
     hv::ok "$current"
   fi

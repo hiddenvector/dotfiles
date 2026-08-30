@@ -55,6 +55,21 @@ setup() {
   [ -L "$HOME/.local/bin/hv" ]
 }
 
+@test "run creates a commented local.Brewfile stub" {
+  source "$HV_ROOT/setup/steps/40-symlinks.sh"
+  hv_step_run
+  [ -f "$HV_CONFIG_HOME/local.Brewfile" ]
+  grep -q "^#" "$HV_CONFIG_HOME/local.Brewfile"
+}
+
+@test "run does not overwrite an existing local.Brewfile" {
+  mkdir -p "$HV_CONFIG_HOME"
+  echo 'cask "chatgpt"' > "$HV_CONFIG_HOME/local.Brewfile"
+  source "$HV_ROOT/setup/steps/40-symlinks.sh"
+  hv_step_run
+  grep -q "chatgpt" "$HV_CONFIG_HOME/local.Brewfile"
+}
+
 @test "run creates the secrets stub with 0600 permissions" {
   source "$HV_ROOT/setup/steps/40-symlinks.sh"
   hv_step_run
@@ -130,6 +145,7 @@ setup() {
   [ ! -e "$HOME/.zshrc" ]
   [ ! -e "$HOME/.secrets" ]
   [ ! -e "$HV_GIT_CONFIG_HOME/local" ]
+  [ ! -e "$HV_CONFIG_HOME/local.Brewfile" ]
   run hv_step_check
   [ "$status" -eq 1 ]
 }

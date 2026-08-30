@@ -51,6 +51,20 @@ setup() {
   hv_assert_called "superpowers"
 }
 
+@test "run warns actionably and skips the plugin install when claude is not on PATH" {
+  rm -f "$HV_STUB_DIR/claude"
+  source "$HV_ROOT/setup/steps/80-agents.sh"
+  # Removing the stub is not enough on a machine that also has a real
+  # `claude` further down the real $PATH (e.g. ~/.local/bin) -- hv_stub_dir
+  # is only ever prepended, never substituted, so a minimal, real-`claude`-
+  # free PATH is required to actually exercise the "not on PATH" branch
+  # rather than silently falling through to the real binary.
+  PATH="$HV_STUB_DIR:/usr/bin:/bin:/usr/sbin:/sbin" run hv_step_run
+  hv_assert_not_called "superpowers"
+  [[ "$stderr$output" == *"claude is not on PATH"* ]]
+  [[ "$stderr$output" == *"hv setup --only homebrew"* ]]
+}
+
 @test "house rules do not inline the tool reference" {
   # The reference belongs in the lazily-loaded skill, not in every session.
   run wc -l < "$HV_ROOT/claude/CLAUDE.md"

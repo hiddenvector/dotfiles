@@ -33,13 +33,31 @@ setup() {
   hv_assert_not_called "--set ComputerName"
 }
 
-@test "run renames a machine with a stock name" {
+@test "run does not rename a machine with a stock name under --yes" {
   hv_stub scutil 0 "Marks-MacBook-Pro"
   source "$HV_ROOT/setup/steps/10-machine.sh"
   run hv_step_run
-  hv_assert_called "--set ComputerName"
-  hv_assert_called "--set HostName"
-  hv_assert_called "--set LocalHostName"
+  hv_assert_not_called "--set ComputerName"
+  hv_assert_not_called "--set HostName"
+  hv_assert_not_called "--set LocalHostName"
+  [[ "$stderr$output" == *"not renaming it under --yes"* ]]
+  [[ "$stderr$output" == *"sudo scutil --set ComputerName"* ]]
+}
+
+@test "run renames a machine with a stock name when confirmed interactively" {
+  hv_stub scutil 0 "Marks-MacBook-Pro"
+  hv_stub_ioreg_uuid "AAAAAAAA-0000-0000-0000-000000000001"
+  run bash -c "printf 'newname\n' | { export HV_YES=0; source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/machine.sh'; source '$HV_ROOT/setup/lib/config.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; source '$HV_ROOT/setup/steps/10-machine.sh'; hv_step_run; }"
+  hv_assert_called "--set ComputerName newname"
+  hv_assert_called "--set HostName newname"
+  hv_assert_called "--set LocalHostName newname"
+}
+
+@test "run shows the full suggestion list and warns names must be unique across machines" {
+  hv_stub scutil 0 "Marks-MacBook-Pro"
+  run bash -c "printf 'newname\n' | { export HV_YES=0; source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/machine.sh'; source '$HV_ROOT/setup/lib/config.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; source '$HV_ROOT/setup/steps/10-machine.sh'; hv_step_run; }"
+  [[ "$output" == *"Suggestions: prometheus atlas hestia kalliope hyperion theseus daedalus"* ]]
+  [[ "$output" == *"other Macs"* ]]
 }
 
 @test "run records modules to config" {
@@ -66,9 +84,11 @@ echo "sudo \$*" >> "$HV_STUB_LOG"
 SUDO_PASSTHROUGH
   chmod +x "$HV_STUB_DIR/sudo"
 
+  # scutil failing --get ComputerName reads as an unset/default name, so
+  # this must go through the interactive rename path (--yes now skips
+  # renaming outright) to actually reach the blocked --set call.
   hv_stub scutil 1 ""
-  source "$HV_ROOT/setup/steps/10-machine.sh"
-  run hv_step_run
+  run bash -c "printf 'newname\n' | { export HV_YES=0; source '$HV_ROOT/setup/lib/log.sh'; source '$HV_ROOT/setup/lib/machine.sh'; source '$HV_ROOT/setup/lib/config.sh'; source '$HV_ROOT/setup/lib/prompt.sh'; source '$HV_ROOT/setup/steps/10-machine.sh'; hv_step_run; }"
   [ "$status" -eq 0 ]
   [[ "$stderr$output" == *"blocked"* ]]
 }

@@ -84,8 +84,18 @@ hv_step_run() {
     fi
   fi
 
-  hv::run claude plugin install superpowers@claude-plugins-official \
-    || hv::warn "could not install the superpowers plugin; install it manually"
+  # claude has no module gate covering this step's dependency (core.Brewfile
+  # carries the claude-code cask precisely so it is always present by the
+  # time this runs) -- but a machine that skipped Homebrew entirely, or ran
+  # it before this cask existed, still needs a clear way forward rather than
+  # the generic failure a missing binary would otherwise produce.
+  if command -v claude >/dev/null 2>&1; then
+    hv::run claude plugin install superpowers@claude-plugins-official \
+      || hv::warn "could not install the superpowers plugin; install it manually"
+  else
+    hv::warn "claude is not on PATH; skipping the superpowers plugin install"
+    hv::log "run 'hv setup --only homebrew' to install it, then re-run 'hv setup --only agents'"
+  fi
 
   return 0
 }

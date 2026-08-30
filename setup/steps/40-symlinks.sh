@@ -67,6 +67,19 @@ hv::_write_local_zsh_stub() {
 EOF
 }
 
+# Companion to local.zsh: machine-specific packages, not tracked anywhere.
+# Bundled by step 50 alongside the module and overlay Brewfiles. A pure
+# comment here reads as empty to 90-check's drift warning (see the comment
+# on hv::_untracked_personal_config), so creating it up front never trips
+# a false "you have personal packages" the moment setup finishes.
+hv::_write_local_brewfile_stub() {
+  cat > "${HV_CONFIG_HOME:-$HOME/.config/hv}/local.Brewfile" <<'EOF'
+# Your own packages, not tracked anywhere.
+# Anything you want on every Mac belongs in your overlay instead.
+# cask "chatgpt"
+EOF
+}
+
 # local.zsh is never a tracked file -- hv::link never touches it -- so any
 # symlink found here was left by a previous, non-hv dotfiles setup. Leaving
 # it alone would let it go dangling the moment that other repo is cleaned up
@@ -144,6 +157,12 @@ EOF
   if [ ! -f "$HOME/.zshrc.d/local.zsh" ] && [ "${HV_DRY_RUN:-0}" != "1" ]; then
     hv::_write_local_zsh_stub
     hv::ok "created ~/.zshrc.d/local.zsh"
+  fi
+
+  if [ ! -f "${HV_CONFIG_HOME:-$HOME/.config/hv}/local.Brewfile" ] && [ "${HV_DRY_RUN:-0}" != "1" ]; then
+    hv::run mkdir -p "${HV_CONFIG_HOME:-$HOME/.config/hv}"
+    hv::_write_local_brewfile_stub
+    hv::ok "created ~/.config/hv/local.Brewfile"
   fi
 
   return 0
