@@ -126,7 +126,12 @@ setup() {
   [ "$status" -eq 0 ]
   hv_assert_not_called "ssh-keygen"
   grep -qF "id_ed25519_signing.pub" "$HV_GIT_CONFIG_HOME/identity"
-  ! grep -qF "id_ed25519_signing_prometheus.pub" "$HV_GIT_CONFIG_HOME/identity"
+  # `case`, not a non-final `! grep ...`: a negated command is exempt from
+  # `set -e` in every bash version, so `! grep -qF ...` here could never
+  # fail the test regardless of what identity actually contained.
+  case "$(cat "$HV_GIT_CONFIG_HOME/identity")" in
+    *id_ed25519_signing_prometheus.pub*) return 1 ;;
+  esac
   # not machine-suffixed
   [ ! -f "$HOME/.ssh/id_ed25519_signing_prometheus" ]
 }

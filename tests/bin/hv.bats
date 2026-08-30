@@ -411,3 +411,33 @@ STEP
     *) return 1 ;;
   esac
 }
+
+@test "a hand-edited config cannot turn off --dry-run partway through a run" {
+  # Regression test for: hv::cmd_setup reloads config after every step (see
+  # the previous test) by re-sourcing ~/.config/hv/config wholesale. That
+  # file is documented, hand-edited user config -- zsh/.zshrc sources it too
+  # -- so it is entirely plausible for it to contain a stale
+  # HV_DRY_RUN="0"/HV_YES="0" left over from a previous non-dry-run session.
+  # Sourcing it mid-run after main() has already parsed --dry-run/--yes into
+  # HV_DRY_RUN=1/HV_YES=1 would silently overwrite those for every step
+  # after the first, since the file is sourced from scratch each time --
+  # exactly the setup()-provided "alpha" then "beta" steps below, both of
+  # which mutate real state via hv::run touch. Only the first step's
+  # subshell would still see HV_DRY_RUN=1; every later one would mutate for
+  # real despite `--dry-run` on the command line, in direct violation of
+  # this branch's invariant that nothing mutates under HV_DRY_RUN=1.
+  mkdir -p "$HV_CONFIG_HOME"
+  printf 'HV_DRY_RUN="0"\nHV_YES="0"\n' > "$HV_CONFIG_HOME/config"
+
+  run "$HV_ROOT/bin/hv" setup --dry-run --yes
+  [ "$status" -eq 0 ]
+
+  # Both steps must still preview rather than mutate -- not just the first
+  # one to run before any reload happens.
+  [ ! -f "$HOME/alpha.done" ]
+  [ ! -f "$HOME/beta.done" ]
+  case "$output" in
+    *"would run: touch"*"would run: touch"*) : ;;
+    *) return 1 ;;
+  esac
+}
