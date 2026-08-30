@@ -18,6 +18,12 @@ for _lib in log link machine config prompt docs; do
   . "$HV_ROOT/setup/lib/$_lib.sh"
 done
 
+# Populates HV_MODULES (and friends) for every step. Step subshells inherit
+# this from the parent environment, so one call here covers them all --
+# without it, hv::modules/hv::module_enabled see an unset HV_MODULES and,
+# under this script's `set -u`, blow up the first time any step calls them.
+hv::config_load
+
 HV_DRY_RUN="${HV_DRY_RUN:-0}"
 HV_YES="${HV_YES:-0}"
 export HV_DRY_RUN HV_YES

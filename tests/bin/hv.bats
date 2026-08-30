@@ -229,3 +229,29 @@ STEP
   [ "$output" != "${output/--only/}" ]
   [ "$output" = "${output/ran-beta/}" ]
 }
+
+@test "hv check runs without unbound-variable errors on a fresh config" {
+  # Every other test in this file points HV_STEPS_DIR at a private fixture.
+  # This one deliberately runs against the *real* setup/steps directory with
+  # a brand-new sandboxed HOME and no config file on disk -- exactly the
+  # state hv::config_load exists to handle (HV_MODULES etc. unset until
+  # something loads the config), and the state a fresh `git clone` followed
+  # by `bin/hv check` actually starts from. A unit test cannot catch a
+  # missing hv::config_load call because every .bats setup() calls
+  # hv::config_load (or hv::config_set then hv::config_load) itself.
+  unset HV_STEPS_DIR
+  # Real Homebrew may well be installed on the machine running this test
+  # (it is, in dev). Point steps 20 and 50 at a prefix with no brew binary
+  # so their checks fail fast and deterministically instead of shelling out
+  # to the real thing.
+  export HV_BREW_PREFIX="$BATS_TEST_TMPDIR/no-brew"
+  run "$HV_ROOT/bin/hv" check
+  # hv check is allowed to report drift (exit 1) on a fresh sandbox -- that
+  # is expected, not a bug. What it must never do is blow up with a shell
+  # runtime error, which is the actual symptom the missing hv::config_load
+  # call produced: "HV_MODULES: unbound variable" from inside hv::modules.
+  case "$stderr$output" in
+    *"unbound variable"*) return 1 ;;
+  esac
+  [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+}
