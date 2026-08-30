@@ -1,0 +1,13 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install bats-core shellcheck
+      - name: shellcheck
+        run: shellcheck -x bin/hv bin/gbd bin/gprune bootstrap setup/lib/*.sh setup/steps/*.sh
+      - name: bats
+        run: bats --recursive tests/
