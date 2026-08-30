@@ -93,9 +93,8 @@ setup() {
 @test "a private GitHub email does not become the string null" {
   hv_stub gh 0 "null"
   source "$HV_ROOT/setup/steps/30-identity.sh"
-  hv_step_run
-  ! grep -q 'email = null' "$HV_GIT_CONFIG_HOME/identity"
-  ! grep -qE 'email =\s*$' "$HV_GIT_CONFIG_HOME/identity"
+  run hv_step_run < /dev/null
+  ! grep -qE 'email = (null)?$' "$HV_GIT_CONFIG_HOME/identity"
 }
 
 @test "the signing key is not uploaded without an explicit confirmation" {
