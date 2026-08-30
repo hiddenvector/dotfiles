@@ -169,6 +169,19 @@ hv::cmd_check() {
   return "$drifted"
 }
 
+# Not a converge step -- cheatsheet only ever reads docs/usage/*.md and
+# prints or regenerates, it never mutates machine state. Keeping it out of
+# hv::cmd_setup means it can never be picked up by `hv::steps`/`hv setup`.
+hv::cmd_cheatsheet() {
+  hv::config_load
+  case "${1:-}" in
+    --regenerate) hv::docs_generate; hv::ok "docs/USAGE.md regenerated" ;;
+    --all) hv::docs_cheatsheet all ;;
+    "") hv::docs_cheatsheet ;;
+    *) hv::docs_cheatsheet "$1" ;;
+  esac
+}
+
 main() {
   local cmd="${1:-}" only=""
   [ $# -gt 0 ] && shift
@@ -185,14 +198,20 @@ main() {
     esac
   fi
 
+  # Anything that isn't a recognized flag is a positional argument for the
+  # command itself (e.g. the module name or --all/--regenerate for
+  # `cheatsheet`) -- collect it instead of discarding it, so `hv cheatsheet
+  # swift` actually reaches hv::cmd_cheatsheet.
+  local -a rest=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --only) only="${2:-}"; shift 2 ;;
       --dry-run) HV_DRY_RUN=1; export HV_DRY_RUN; shift ;;
       --yes) HV_YES=1; export HV_YES; shift ;;
-      *) shift ;;
+      *) rest+=("$1"); shift ;;
     esac
   done
+  set -- "${rest[@]+"${rest[@]}"}"
 
   case "$cmd" in
     setup)     hv::cmd_setup "$only" ;;
@@ -205,7 +224,7 @@ main() {
       # sense combined with it. Reject rather than silently ignoring it.
       [ -n "$only" ] && hv::die "--only is not valid with 'overlay' (it already targets the overlay step)"
       hv::cmd_setup overlay ;;
-    cheatsheet) hv::cmd_setup cheatsheet ;;
+    cheatsheet) hv::cmd_cheatsheet "$@" ;;
     ""|help|-h|--help) hv::usage; return 1 ;;
     *) hv::err "unknown command: $cmd"; hv::usage; return 1 ;;
   esac
