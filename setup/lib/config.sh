@@ -39,10 +39,11 @@ hv::config_set() {
 # core is mandatory and always first; order otherwise follows HV_ALL_MODULES.
 hv::modules() {
   local m
+  : "${HV_MODULES:?hv::config_load must be called before hv::modules}"
   printf '%s\n' core
   for m in $HV_ALL_MODULES; do
     [ "$m" = "core" ] && continue
-    case " ${HV_MODULES:-core} " in *" $m "*) printf '%s\n' "$m" ;; esac
+    case " $HV_MODULES " in *" $m "*) printf '%s\n' "$m" ;; esac
   done
 }
 
