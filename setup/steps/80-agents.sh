@@ -90,7 +90,11 @@ hv_step_run() {
   # it before this cask existed, still needs a clear way forward rather than
   # the generic failure a missing binary would otherwise produce.
   if command -v claude >/dev/null 2>&1; then
-    hv::run claude plugin install superpowers@claude-plugins-official \
+    # superpowers ships from obra/superpowers-marketplace, not the
+    # nonexistent claude-plugins-official. Both calls are idempotent.
+    hv::run claude plugin marketplace add obra/superpowers-marketplace \
+      || hv::warn "could not add the superpowers-marketplace"
+    hv::run claude plugin install superpowers@superpowers-marketplace \
       || hv::warn "could not install the superpowers plugin; install it manually"
   else
     hv::warn "claude is not on PATH; skipping the superpowers plugin install"
