@@ -31,10 +31,14 @@ zstyle ':completion:*' use-cache on
 zstyle ':completion:*' cache-path ~/.zsh/cache
 
 autoload -Uz compinit
+# -u: skip the insecure-directory prompt. Homebrew's prefix here is
+# intentionally group-writable (admin group) so it can be shared across
+# multiple admin accounts on the same machine, which compinit otherwise
+# flags on every shell.
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
-  compinit -d ~/.zcompdump
+  compinit -u -d ~/.zcompdump
 else
-  compinit -C -d ~/.zcompdump
+  compinit -C -u -d ~/.zcompdump
 fi
 
 bindkey '^I' menu-complete
