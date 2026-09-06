@@ -53,12 +53,12 @@ hv::_bundle_exec() {
   local file="$1" out rc tap
 
   if [ "${HV_DRY_RUN:-0}" = "1" ]; then
-    hv::log "would run: brew bundle --file $file"
+    hv::log "would run: brew bundle --quiet --file $file"
     return 0
   fi
 
   rc=0
-  out="$("$HV_BREW_PREFIX/bin/brew" bundle --file "$file" 2>&1)" || rc=$?
+  out="$("$HV_BREW_PREFIX/bin/brew" bundle --quiet --file "$file" 2>&1)" || rc=$?
   [ -n "$out" ] && printf '%s\n' "$out"
 
   if [ "$rc" -ne 0 ]; then
@@ -66,7 +66,7 @@ hv::_bundle_exec() {
     if [ -n "$tap" ] && hv::_offer_trust_tap "$tap"; then
       hv::log "retrying $file"
       rc=0
-      out="$("$HV_BREW_PREFIX/bin/brew" bundle --file "$file" 2>&1)" || rc=$?
+      out="$("$HV_BREW_PREFIX/bin/brew" bundle --quiet --file "$file" 2>&1)" || rc=$?
       [ -n "$out" ] && printf '%s\n' "$out"
       [ "$rc" -eq 0 ] || hv::warn "still failing after trusting '$tap'"
     fi

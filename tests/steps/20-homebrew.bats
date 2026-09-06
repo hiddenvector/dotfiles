@@ -50,7 +50,7 @@ setup() {
   hv_stub_at_path "$HV_BREW_PREFIX/bin/brew" "brew" 0
   source "$HV_ROOT/setup/steps/20-homebrew.sh"
   run hv_step_run
-  hv_assert_called "bundle --file"
+  hv_assert_called "bundle --quiet --file"
 }
 
 @test "run offers the admin-group share when the prefix is not writable" {
@@ -69,6 +69,16 @@ setup() {
   run hv_step_run
   chmod +w "$HV_BREW_PREFIX"
   [[ "$stderr$output" == *"any admin user"* ]]
+}
+
+@test "run sets an inheritable ACL so files created later stay group-writable" {
+  hv_stub_at_path "$HV_BREW_PREFIX/bin/brew" "brew" 0
+  chmod -w "$HV_BREW_PREFIX"
+  unset HV_YES
+  source "$HV_ROOT/setup/steps/20-homebrew.sh"
+  run hv_step_run <<< "y"
+  chmod +w "$HV_BREW_PREFIX"
+  hv_assert_called "chmod +a"
 }
 
 @test "run does not chgrp when the prefix is already writable" {

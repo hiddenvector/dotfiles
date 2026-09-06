@@ -15,7 +15,7 @@ hv_stub_brew_untrusted_tap() {
 #!/usr/bin/env bash
 echo "brew $*" >> "$HV_STUB_LOG"
 case "$*" in
-  "bundle --file "*web.Brewfile)
+  "bundle --quiet --file "*web.Brewfile)
     count_file="$HV_STUB_DIR/web_bundle_count"
     n=0
     [ -f "$count_file" ] && n=$(cat "$count_file")

@@ -42,6 +42,19 @@ hv::_offer_shared_write() {
   if hv::confirm "Share write access with the admin group?" n; then
     hv::run sudo chgrp -R admin "$HV_BREW_PREFIX"
     hv::run sudo chmod -R g+w "$HV_BREW_PREFIX"
+    # The recursive chmod above only fixes what already exists. Anything
+    # Homebrew creates later (a new cask's cache dir, a new Cellar keg, ...)
+    # is only as group-writable as its creator's umask allows -- typically
+    # 755, not writable by the other admin account. An inheritable ACL
+    # applies full read/write/delete to every file and directory created
+    # under the prefix from now on, regardless of who creates it or their
+    # umask, so this fix doesn't have to be re-run every time a new
+    # top-level dir shows up. Plain "read,write,execute" is not enough here:
+    # macOS expands that alias for a directory to list,add_file,search only
+    # -- it omits add_subdirectory and delete_child, so group members could
+    # add files but not create or replace directories, which is exactly
+    # what a cask install/upgrade does. Spelled out explicitly instead.
+    hv::run sudo chmod +a "group:admin allow list,search,add_file,add_subdirectory,delete,delete_child,readattr,writeattr,readextattr,writeextattr,readsecurity,writesecurity,chown,file_inherit,directory_inherit" "$HV_BREW_PREFIX"
     hv::ok "admin group can now write $HV_BREW_PREFIX"
     return 0
   fi
@@ -65,7 +78,7 @@ hv_step_run() {
     }
   fi
 
-  if hv::run hv::_brew bundle --file "$HV_ROOT/brew/core.Brewfile"; then
+  if hv::run hv::_brew bundle --quiet --file "$HV_ROOT/brew/core.Brewfile"; then
     hv::ok "core packages"
   else
     hv::warn "core package installation failed — run 'hv setup --only homebrew' after fixing"
