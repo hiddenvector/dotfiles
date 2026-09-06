@@ -89,7 +89,8 @@ A module is a named bundle of extra tooling beyond the always-installed
 
 - `swift` — Xcode and Swift-package tooling (`xcbeautify`, `swiftlint`).
 - `web` — Node and web-deployment tooling (`fnm`, `pnpm`, `vercel`,
-  `supabase`, `railway`, `jq`).
+  `supabase`, `railway`, `jq`) plus Docker Desktop, which `supabase start`
+  needs to run Postgres/GoTrue/Storage locally.
 - `python` — Python tooling (`pyenv`, `uv`).
 - `security` — secret-scanning and git-hook tooling (`gitleaks`,
   `pre-commit`).
