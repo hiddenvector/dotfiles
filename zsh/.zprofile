@@ -2,6 +2,10 @@
 
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
+# Docker Desktop
+
+export PATH="$PATH:/Users/markadams/.docker/bin"
+
 # Local bin
 
 export PATH="$HOME/.local/bin:$PATH"

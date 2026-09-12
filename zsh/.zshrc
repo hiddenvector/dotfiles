@@ -22,6 +22,11 @@ command -v fnm   >/dev/null 2>&1 && eval "$(fnm env --use-on-cd)"
 
 # Add Homebrew's Zsh completions to fpath
 fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
+# Docker Desktop's installer normally appends its own fpath+compinit block
+# after everything else; folded in here so it shares the single -u compinit
+# call below instead of re-running compinit unguarded (which reintroduces
+# the insecure-directory prompt).
+fpath=(/Users/markadams/.docker/completions $fpath)
 
 # Completion UX
 zstyle ':completion:*' menu select
