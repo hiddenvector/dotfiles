@@ -27,6 +27,9 @@ fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
 # call below instead of re-running compinit unguarded (which reintroduces
 # the insecure-directory prompt).
 fpath=(/Users/markadams/.docker/completions $fpath)
+# The sentry CLI's installer appends its completions after compinit, where
+# they never load; folded in here for the same reason as Docker's.
+fpath=(/Users/markadams/.local/share/zsh/site-functions $fpath)
 
 # Completion UX
 zstyle ':completion:*' menu select
