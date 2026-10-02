@@ -24,3 +24,8 @@ export LC_ALL=en_US.UTF-8
 
 export EDITOR="code --wait"
 export VISUAL="$EDITOR"
+
+# zsh ships a `log` builtin (from its login-watch feature) that shadows /usr/bin/log. Apple
+# disables it in /etc/zshrc, which only interactive shells read; non-interactive login shells
+# (scripts, agents, `zsh -lc`) still get the builtin. Disable it for every login shell here.
+disable log 2>/dev/null

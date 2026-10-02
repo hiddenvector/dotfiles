@@ -3,4 +3,6 @@
 brew "fnm"
 brew "supabase/tap/supabase"
 brew "railway"
+# Cloudflare's CLI: DNS for hiddenvector.studio, Turnstile, Workers.
+brew "cloudflare-wrangler"
 brew "jq"
