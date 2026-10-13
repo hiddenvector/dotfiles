@@ -178,6 +178,61 @@ GITALLOW
   [ "$output" = "" ]
 }
 
+@test "gprune skips a gone branch checked out in a worktree and prunes the rest" {
+  git init -q --bare "$BATS_TEST_TMPDIR/remote.git"
+  git remote add origin "$BATS_TEST_TMPDIR/remote.git"
+  git push -q origin main
+
+  # `git branch` marks this one with a leading `+`, which gprune used to
+  # pass to `git branch -D` as a branch name. Named to sort first, so the
+  # old failure aborted the run before reaching the others.
+  for b in docs-tweak fix-typo old-spike; do
+    git branch "$b"
+    git push -q -u origin "$b"
+  done
+  git worktree add -q "$BATS_TEST_TMPDIR/wt" docs-tweak
+  git push -q origin --delete docs-tweak fix-typo old-spike
+
+  run "$HV_ROOT/bin/gprune"
+  [ "$status" -eq 0 ]
+  case "$output" in
+    *"skipping docs-tweak"*) : ;;
+    *) return 1 ;;
+  esac
+
+  run git branch --list docs-tweak
+  case "$output" in
+    *docs-tweak*) : ;;
+    *) return 1 ;;
+  esac
+
+  run git branch --list fix-typo old-spike
+  [ "$output" = "" ]
+}
+
+@test "gprune deletes a gone branch that shares its name with a tag" {
+  # With a same-named tag, `%(refname:short)` is `heads/v1.2`, which
+  # `git branch -D` can't find. The tag is on the remote so gprune's own
+  # `--prune-tags` keeps it.
+  git init -q --bare "$BATS_TEST_TMPDIR/remote.git"
+  git remote add origin "$BATS_TEST_TMPDIR/remote.git"
+  git push -q origin main
+  git branch v1.2
+  git push -q -u origin refs/heads/v1.2
+  git tag v1.2
+  git push -q origin refs/tags/v1.2
+  git push -q origin --delete refs/heads/v1.2
+
+  run "$HV_ROOT/bin/gprune"
+  [ "$status" -eq 0 ]
+
+  run git show-ref --verify --quiet refs/heads/v1.2
+  [ "$status" -ne 0 ]
+
+  run git show-ref --verify --quiet refs/tags/v1.2
+  [ "$status" -eq 0 ]
+}
+
 @test "helpers need no TTY" {
   run bash -c "'$HV_ROOT/bin/gbd' main < /dev/null"
   [ "$status" -eq 3 ]

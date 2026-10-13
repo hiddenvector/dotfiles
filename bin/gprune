@@ -6,11 +6,21 @@ git fetch --prune --prune-tags 2>/dev/null || true
 
 current="$(git branch --show-current 2>/dev/null || true)"
 
-git branch -vv | sed 's/^\* /  /' | awk '/: gone]/{print $1}' | while read -r b; do
-  [ -z "$b" ] && continue
-  [ "$b" = "$current" ] && continue
-  case "$b" in
-    main|master|develop) continue ;;
-  esac
-  git branch -D "$b"
-done
+# Plumbing, not `git branch -vv`: that output prefixes the current branch
+# with `* ` and branches checked out in other worktrees with `+ `. Git emits
+# a line only for gone branches, as "<name> <worktree path, if any>".
+# lstrip=2, not :short, which becomes `heads/<name>` when a tag shares it.
+git for-each-ref refs/heads \
+  --format='%(if:equals=[gone])%(upstream:track)%(then)%(refname:lstrip=2) %(worktreepath)%(end)' |
+  while read -r b wt; do
+    [ -z "$b" ] && continue
+    [ "$b" = "$current" ] && continue
+    case "$b" in
+      main|master|develop) continue ;;
+    esac
+    if [ -n "$wt" ]; then
+      echo "gprune: skipping $b, checked out in worktree $wt" >&2
+      continue
+    fi
+    git branch -D "$b"
+  done
