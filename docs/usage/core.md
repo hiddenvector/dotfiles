@@ -101,9 +101,12 @@ the shell, prompt, and git layer everything else sits on top of.
 - `gprune` (`bin/gprune`) — a real executable, not a shell function, so it
   works from any script or tool without the zsh config being loaded. It
   fetches with `--prune --prune-tags`, then deletes every local branch
-  whose upstream is gone (`git branch -vv` reporting `: gone]`), skipping
+  whose upstream is gone (`git for-each-ref` reporting `[gone]`), skipping
   the branch you're currently on and always refusing to touch `main`,
-  `master`, or `develop`. Non-interactive and safe to run unattended.
+  `master`, or `develop`. A gone branch that's checked out in another
+  worktree is skipped with a one-line `gprune: skipping ...` notice on
+  stderr; remove the worktree and rerun to prune it. Non-interactive and
+  safe to run unattended.
 - `gbd [-D] <branch-name>` (`bin/gbd`) — also a real executable. Deletes a
   branch both locally and on `origin` (`git branch -d`/`-D` then `git push
   origin --delete`, the latter ignored if the branch was never pushed).
